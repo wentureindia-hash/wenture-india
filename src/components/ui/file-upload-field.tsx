@@ -106,7 +106,7 @@ export function FileUploadField({
     }
   };
 
-  const hasAttachedFile = Boolean(currentFile || currentUrl);
+  const hasAttachedFile = Boolean(currentFile || currentUrl || currentFileName);
   const displayName = currentFile?.name || currentFileName || "Attached Document";
   const displaySize = currentFile ? `(${(currentFile.size / (1024 * 1024)).toFixed(2)} MB)` : "";
 

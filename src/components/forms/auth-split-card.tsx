@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signInUser, signUpUser, resetUserPassword, UserRole } from "@/lib/firebase/auth";
+import { signInUser, signUpUser, resetUserPassword, addRoleToAccount, UserRole } from "@/lib/firebase/auth";
 import { BrandLogo } from "@/components/brand-logo";
 import { WentureEmblem } from "@/components/wenture-emblem";
 
@@ -36,6 +36,11 @@ export function AuthSplitCard({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   const [showPassword, setShowPassword] = useState(false);
+  const [emailExistsPrompt, setEmailExistsPrompt] = useState(false);
+  const [pendingRoleAddition, setPendingRoleAddition] = useState<{
+    missingRole: UserRole;
+    existingRoles: UserRole[];
+  } | null>(null);
 
   const handlePasswordReset = async () => {
     if (!email) {
@@ -53,10 +58,41 @@ export function AuthSplitCard({
     }
   };
 
+  const handleConfirmAddRole = async () => {
+    if (!pendingRoleAddition) return;
+    setLoading(true);
+    setErrorMsg(null);
+    const targetRole = pendingRoleAddition.missingRole;
+    const res = await addRoleToAccount(targetRole, {
+      companyName: targetRole === "entrepreneur" ? companyName : undefined,
+      sector: targetRole === "entrepreneur" ? sector : undefined,
+      phone,
+      location,
+    });
+    setLoading(false);
+    if (res.error) {
+      setErrorMsg(res.error);
+    } else {
+      setSuccessMsg(`Successfully added ${targetRole} role! Redirecting...`);
+      setPendingRoleAddition(null);
+      setTimeout(() => {
+        router.push(targetRole === "investor" ? "/for-investors" : "/for-entrepreneurs");
+      }, 1200);
+    }
+  };
+
+  const handleContinueExistingRole = () => {
+    if (!pendingRoleAddition) return;
+    const primaryRole = pendingRoleAddition.existingRoles[0] || "entrepreneur";
+    router.push(primaryRole === "investor" ? "/for-investors" : "/for-entrepreneurs");
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
+    setEmailExistsPrompt(false);
+    setPendingRoleAddition(null);
     setLoading(true);
 
     if (mode === "login") {
@@ -69,6 +105,11 @@ export function AuthSplitCard({
       setLoading(false);
       if (res.error) {
         setErrorMsg(res.error);
+      } else if (res.needsRoleAddition && res.missingRole) {
+        setPendingRoleAddition({
+          missingRole: res.missingRole,
+          existingRoles: res.existingRoles || ["entrepreneur"],
+        });
       } else {
         setSuccessMsg("Authentication successful! Redirecting...");
         setTimeout(() => {
@@ -103,7 +144,11 @@ export function AuthSplitCard({
       });
       setLoading(false);
       if (res.error) {
-        setErrorMsg(res.error);
+        if (res.emailInUse) {
+          setEmailExistsPrompt(true);
+        } else {
+          setErrorMsg(res.error);
+        }
       } else {
         setSuccessMsg("Profile registered successfully! Welcome to Wenture India.");
         setTimeout(() => {
@@ -234,8 +279,90 @@ export function AuthSplitCard({
             </div>
           )}
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Existing Account Detected Alert */}
+          {emailExistsPrompt && (
+            <div className="mb-5 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-2.5">
+              <div className="flex items-center gap-2 font-bold text-amber-950">
+                <span className="material-symbols-outlined text-[18px] text-amber-700">info</span>
+                <span>Account Already Exists</span>
+              </div>
+              <p className="leading-relaxed">
+                An account with <strong className="font-semibold text-amber-950">{email}</strong> already exists on Wenture India. Please sign in to access your account and add the <strong className="capitalize">{role}</strong> role.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setMode("login");
+                  setErrorMsg(null);
+                  setEmailExistsPrompt(false);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-700 hover:bg-amber-800 text-white font-bold rounded-lg text-xs transition-colors shadow-xs"
+              >
+                <span>Sign In to Existing Account</span>
+                <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+              </button>
+            </div>
+          )}
+
+          {/* Multi-Role Addition Flow (Post-Authentication) */}
+          {pendingRoleAddition ? (
+            <div className="bg-[#F4FAFD] border border-[#00A6E8]/30 rounded-2xl p-5 sm:p-6 space-y-4">
+              <div className="flex items-center gap-2.5 text-[#00658F]">
+                <span className="material-symbols-outlined text-[24px]">verified_user</span>
+                <h3 className="font-bold text-sm sm:text-base text-[#0A192A]">Authentication Verified</h3>
+              </div>
+              <p className="text-xs text-[#5F7180] leading-relaxed">
+                You are securely signed in as an{" "}
+                <span className="font-bold text-[#0A192A] capitalize">
+                  {pendingRoleAddition.existingRoles.join(", ")}
+                </span>
+                . Your account does not currently include the{" "}
+                <span className="font-bold text-[#00658F] capitalize">
+                  {pendingRoleAddition.missingRole}
+                </span>{" "}
+                role.
+              </p>
+
+              {pendingRoleAddition.missingRole === "entrepreneur" && (
+                <div className="space-y-3 pt-1">
+                  <div>
+                    <label className="block text-xs font-semibold text-[#0A192A] mb-1">
+                      Company / Enterprise Name (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={companyName}
+                      onChange={(e) => setCompanyName(e.target.value)}
+                      placeholder="Acme Technologies"
+                      className="w-full px-3 py-2 bg-white border border-[#DCECF2] rounded-lg text-xs text-[#0A192A] placeholder:text-slate-400 focus:outline-none focus:border-[#00A6E8]"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-2 flex flex-col gap-2.5">
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={handleConfirmAddRole}
+                  className="w-full py-3 bg-[#00A6E8] hover:bg-[#0093CE] text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-all shadow-md shadow-[#00A6E8]/20 disabled:opacity-50"
+                >
+                  {loading ? "ADDING ROLE..." : `Add ${pendingRoleAddition.missingRole} Role & Continue`}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={handleContinueExistingRole}
+                  className="w-full py-2.5 bg-white border border-[#DCECF2] hover:bg-[#F1F6FA] text-[#5F7180] hover:text-[#0A192A] font-bold text-xs rounded-lg transition-all"
+                >
+                  Continue as {pendingRoleAddition.existingRoles[0]}
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Form */
+            <form onSubmit={handleSubmit} className="space-y-4">
             {mode === "signup" && (
               <>
                 <div>
@@ -383,6 +510,7 @@ export function AuthSplitCard({
               </button>
             </div>
           </form>
+          )}
 
           {/* Footer Note */}
           <div className="mt-6 text-center text-sm text-[#5F7180]">

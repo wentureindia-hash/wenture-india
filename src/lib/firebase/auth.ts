@@ -29,13 +29,62 @@ export interface UserProfile {
   name?: string;
   email: string;
   phone?: string;
-  role: UserRole;
+  role: UserRole; // Active role mirror for backward compatibility
+  roles?: UserRole[]; // Array of assigned roles, e.g. ["investor", "entrepreneur"]
+  activeRole?: UserRole; // Currently active platform role
   isAdmin?: boolean;
+  isVerified?: boolean;
+  verificationStatus?: "unsubmitted" | "pending" | "approved" | "rejected";
   companyName?: string;
   sector?: string;
   location?: string;
   createdAt?: unknown;
   updatedAt?: unknown;
+}
+
+/**
+ * Normalizes roles and activeRole for backward-compatible multi-role support.
+ * Single-role accounts gracefully map to roles: [role], activeRole: role.
+ */
+export function normalizeUserRoles(data: {
+  role?: unknown;
+  roles?: unknown;
+  activeRole?: unknown;
+}): { roles: UserRole[]; activeRole: UserRole } {
+  const allowedRoles: UserRole[] = ["investor", "entrepreneur", "admin"];
+
+  let roles: UserRole[] = [];
+  if (Array.isArray(data.roles)) {
+    roles = data.roles
+      .map((r) => String(r).toLowerCase().trim() as UserRole)
+      .filter((r) => allowedRoles.includes(r));
+  }
+
+  // Fallback to legacy single role field if roles array is empty or absent
+  if (roles.length === 0) {
+    const legacyRole = (data.role ? String(data.role).toLowerCase().trim() : "entrepreneur") as UserRole;
+    roles = [allowedRoles.includes(legacyRole) ? legacyRole : "entrepreneur"];
+  }
+
+  // Determine active platform role
+  let activeRole: UserRole = "entrepreneur";
+  const rawActive = data.activeRole ? String(data.activeRole).toLowerCase().trim() as UserRole : null;
+  const rawRole = data.role ? String(data.role).toLowerCase().trim() as UserRole : null;
+
+  if (rawActive && allowedRoles.includes(rawActive)) {
+    activeRole = rawActive;
+  } else if (rawRole && allowedRoles.includes(rawRole)) {
+    activeRole = rawRole;
+  } else if (roles.length > 0) {
+    activeRole = roles[0];
+  }
+
+  // Ensure activeRole is always present in roles list
+  if (!roles.includes(activeRole)) {
+    roles.push(activeRole);
+  }
+
+  return { roles, activeRole };
 }
 
 /**
@@ -78,9 +127,13 @@ export async function createUserProfile(
   profileData: Omit<UserProfile, "uid" | "createdAt">
 ): Promise<{ profile: UserProfile | null; error: string | null }> {
   try {
+    const { roles, activeRole } = normalizeUserRoles(profileData);
     const fullProfile: UserProfile = {
       uid,
       ...profileData,
+      role: activeRole,
+      roles,
+      activeRole,
     };
 
     const docRef = doc(db, "users", uid);
@@ -107,14 +160,20 @@ export async function getUserProfile(uid: string): Promise<{ profile: UserProfil
     if (docSnap.exists()) {
       const data = docSnap.data();
       const resolvedName = data.fullName || data.name || "";
+      const { roles, activeRole } = normalizeUserRoles(data);
+
       const profile: UserProfile = {
         uid,
         fullName: resolvedName,
         name: resolvedName,
         email: data.email || "",
         phone: data.phone || "",
-        role: (data.role as UserRole) || "entrepreneur",
+        role: activeRole,
+        roles,
+        activeRole,
         isAdmin: data.role === "admin" || data.isAdmin === true,
+        isVerified: data.isVerified === true,
+        verificationStatus: data.verificationStatus || "unsubmitted",
         companyName: data.companyName || "",
         sector: data.sector || "",
         location: data.location || "",
@@ -135,6 +194,8 @@ export async function getUserProfile(uid: string): Promise<{ profile: UserProfil
         email: currentUser.email || "",
         phone: currentUser.phoneNumber || "",
         role: "entrepreneur",
+        roles: ["entrepreneur"],
+        activeRole: "entrepreneur",
         isAdmin: false,
         companyName: "",
         sector: "",
@@ -231,12 +292,19 @@ export async function signUpUser(
     sector?: string;
     location?: string;
   }
-): Promise<{ user: User | null; profile: UserProfile | null; error: string | null }> {
+): Promise<{
+  user: User | null;
+  profile: UserProfile | null;
+  error: string | null;
+  code?: string;
+  emailInUse?: boolean;
+}> {
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
     const user = userCredential.user;
 
     const resolvedName = (profileData.fullName || profileData.name || "").trim();
+    const targetRole = profileData.role;
 
     const fullProfile: UserProfile = {
       uid: user.uid,
@@ -244,7 +312,9 @@ export async function signUpUser(
       fullName: resolvedName,
       name: resolvedName,
       phone: (profileData.phone || "").trim(),
-      role: profileData.role,
+      role: targetRole,
+      roles: [targetRole],
+      activeRole: targetRole,
       isAdmin: false,
       companyName: (profileData.companyName || "").trim(),
       sector: (profileData.sector || "").trim(),
@@ -266,54 +336,79 @@ export async function signUpUser(
     return { user, profile: fullProfile, error: null };
   } catch (err: unknown) {
     const error = err as { code?: string; message?: string };
+    const isEmailInUse = error.code === "auth/email-already-in-use";
     const cleanMsg = formatFirebaseAuthError(error.code, error.message || "Failed to create account.");
-    return { user: null, profile: null, error: cleanMsg };
+    return {
+      user: null,
+      profile: null,
+      error: cleanMsg,
+      code: error.code,
+      emailInUse: isEmailInUse,
+    };
   }
 }
 
 /**
- * Sign in existing user with Email and Password & enforce role validation
+ * Sign in existing user with Email and Password & handle multi-role validation seamlessly
  */
 export async function signInUser(
   email: string,
   password: string,
   expectedRole?: UserRole
-): Promise<{ user: User | null; profile: UserProfile | null; error: string | null }> {
+): Promise<{
+  user: User | null;
+  profile: UserProfile | null;
+  error: string | null;
+  code?: string;
+  needsRoleAddition?: boolean;
+  missingRole?: UserRole;
+  existingRoles?: UserRole[];
+}> {
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
     const user = userCredential.user;
 
-    // Fetch profile from Firestore
+    // Fetch profile from Firestore with normalized roles
     let profile: UserProfile | null = null;
     try {
-      const docRef = doc(db, "users", user.uid);
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        profile = docSnap.data() as UserProfile;
-      }
+      const profileRes = await getUserProfile(user.uid);
+      profile = profileRes.profile;
     } catch {
       // Ignore firestore read error if offline
     }
 
-    // Enforce role check if expectedRole is provided
-    if (expectedRole && profile && profile.role) {
-      if (profile.role !== expectedRole) {
-        // Sign out to prevent unauthorized session
-        await signOut(auth);
+    // Role check & activeRole synchronization if expectedRole is specified
+    if (expectedRole && profile) {
+      const userRoles = profile.roles || [profile.role];
+      const hasExpectedRole = userRoles.includes(expectedRole);
 
-        if (profile.role === "entrepreneur") {
-          return {
-            user: null,
-            profile: null,
-            error: "This account is registered as an Entrepreneur. Please use the Entrepreneur login.",
-          };
-        } else if (profile.role === "investor") {
-          return {
-            user: null,
-            profile: null,
-            error: "This account is registered as an Investor. Please use the Investor login.",
-          };
+      if (hasExpectedRole) {
+        // User already has this role; ensure activeRole matches
+        if (profile.activeRole !== expectedRole) {
+          try {
+            const userRef = doc(db, "users", user.uid);
+            await updateDoc(userRef, {
+              activeRole: expectedRole,
+              role: expectedRole,
+              updatedAt: serverTimestamp(),
+            });
+            profile.activeRole = expectedRole;
+            profile.role = expectedRole;
+          } catch {
+            // Non-blocking in case of offline
+          }
         }
+      } else {
+        // User is authenticated, but does not yet possess the expected role.
+        // Return context so UI can prompt user to add the missing role without signing out.
+        return {
+          user,
+          profile,
+          error: null,
+          needsRoleAddition: true,
+          missingRole: expectedRole,
+          existingRoles: userRoles,
+        };
       }
     }
 
@@ -321,7 +416,103 @@ export async function signInUser(
   } catch (err: unknown) {
     const error = err as { code?: string; message?: string };
     const cleanMsg = formatFirebaseAuthError(error.code, error.message || "Failed to sign in.");
-    return { user: null, profile: null, error: cleanMsg };
+    return { user: null, profile: null, error: cleanMsg, code: error.code };
+  }
+}
+
+/**
+ * Switch the active role between assigned roles for the current authenticated user
+ */
+export async function switchActiveRole(targetRole: UserRole): Promise<{ error: string | null; activeRole?: UserRole }> {
+  try {
+    if (targetRole !== "investor" && targetRole !== "entrepreneur") {
+      return { error: "Invalid role selected. Only Investor or Entrepreneur roles can be active." };
+    }
+
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      return { error: "You must be signed in to switch roles." };
+    }
+
+    const { profile } = await getUserProfile(currentUser.uid);
+    if (!profile) {
+      return { error: "User profile not found." };
+    }
+
+    const roles = profile.roles || [profile.role];
+    if (!roles.includes(targetRole)) {
+      return { error: `Your account does not have the ${targetRole} role assigned.` };
+    }
+
+    const docRef = doc(db, "users", currentUser.uid);
+    await updateDoc(docRef, {
+      activeRole: targetRole,
+      role: targetRole,
+      updatedAt: serverTimestamp(),
+    });
+
+    return { error: null, activeRole: targetRole };
+  } catch (err: unknown) {
+    const error = err as { message?: string };
+    return { error: error.message || "Failed to switch active role." };
+  }
+}
+
+/**
+ * Add a new role (Investor or Entrepreneur) to the current authenticated user's account.
+ * Strictly prevents self-assignment of administrative roles.
+ */
+export async function addRoleToAccount(
+  newRole: UserRole,
+  additionalData?: {
+    companyName?: string;
+    sector?: string;
+    phone?: string;
+    location?: string;
+  }
+): Promise<{ error: string | null; roles?: UserRole[]; activeRole?: UserRole }> {
+  try {
+    if (newRole !== "investor" && newRole !== "entrepreneur") {
+      return { error: "Unauthorized role assignment. Only Investor or Entrepreneur roles may be added." };
+    }
+
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      return { error: "You must be signed in to add a role." };
+    }
+
+    const { profile } = await getUserProfile(currentUser.uid);
+    const existingRoles = profile?.roles || (profile?.role ? [profile.role] : []);
+
+    const updatedRoles = Array.from(new Set([...existingRoles, newRole]));
+
+    const docRef = doc(db, "users", currentUser.uid);
+    const updatePayload: Record<string, unknown> = {
+      roles: updatedRoles,
+      activeRole: newRole,
+      role: newRole,
+      updatedAt: serverTimestamp(),
+    };
+
+    if (additionalData?.companyName && !profile?.companyName) {
+      updatePayload.companyName = additionalData.companyName.trim();
+    }
+    if (additionalData?.sector && !profile?.sector) {
+      updatePayload.sector = additionalData.sector.trim();
+    }
+    if (additionalData?.phone && !profile?.phone) {
+      updatePayload.phone = additionalData.phone.trim();
+    }
+    if (additionalData?.location && !profile?.location) {
+      updatePayload.location = additionalData.location.trim();
+    }
+
+    await setDoc(docRef, updatePayload, { merge: true });
+
+    return { error: null, roles: updatedRoles, activeRole: newRole };
+  } catch (err: unknown) {
+    const error = err as { message?: string };
+    return { error: error.message || "Failed to add role to account." };
   }
 }
 
@@ -473,14 +664,19 @@ export async function getAllUsers(): Promise<{ users: UserProfile[]; error: stri
     querySnapshot.forEach((docSnap) => {
       const data = docSnap.data();
       const resolvedName = data.fullName || data.name || "Unnamed User";
+      const { roles, activeRole } = normalizeUserRoles(data);
       users.push({
         uid: docSnap.id,
         fullName: resolvedName,
         name: resolvedName,
         email: data.email || "",
         phone: data.phone || "",
-        role: (data.role as UserRole) || "entrepreneur",
+        role: activeRole,
+        roles,
+        activeRole,
         isAdmin: data.role === "admin" || data.isAdmin === true,
+        isVerified: data.isVerified === true,
+        verificationStatus: data.verificationStatus || "unsubmitted",
         companyName: data.companyName || "",
         sector: data.sector || "",
         location: data.location || "",

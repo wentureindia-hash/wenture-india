@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { BrandLogo } from "@/components/brand-logo";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "@/lib/firebase/auth-context";
+import { RoleSwitchModal } from "@/components/profile/role-switch-modal";
 
 interface NavbarProps {
   className?: string;
@@ -15,13 +16,64 @@ interface NavbarProps {
 
 export function Navbar({ className, hideAuth = false }: NavbarProps) {
   const pathname = usePathname();
-  const { isAuthenticated, isAdmin, signOut } = useAuth();
+  const { isAuthenticated, isAdmin, signOut, roles, activeRole, switchActiveRole } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [investorDropdownOpen, setInvestorDropdownOpen] = useState(false);
   const [entrepreneurDropdownOpen, setEntrepreneurDropdownOpen] = useState(false);
+  const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const investorTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const entrepreneurTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const roleDropdownRef = React.useRef<HTMLDivElement | null>(null);
   const [scrolled, setScrolled] = useState(false);
+  const [roleSwitchModalConfig, setRoleSwitchModalConfig] = useState<{
+    isOpen: boolean;
+    targetRole: "investor" | "entrepreneur";
+    targetPath: string;
+  } | null>(null);
+
+  const handleListVentureClick = (e: React.MouseEvent) => {
+    if (
+      isAuthenticated &&
+      !isAdmin &&
+      roles?.includes("investor") &&
+      roles?.includes("entrepreneur") &&
+      activeRole === "investor"
+    ) {
+      e.preventDefault();
+      setEntrepreneurDropdownOpen(false);
+      setMobileMenuOpen(false);
+      setRoleSwitchModalConfig({
+        isOpen: true,
+        targetRole: "entrepreneur",
+        targetPath: "/profile/listings",
+      });
+      return;
+    }
+    setEntrepreneurDropdownOpen(false);
+    setMobileMenuOpen(false);
+  };
+
+  const handleInvestorProfileClick = (e: React.MouseEvent) => {
+    if (
+      isAuthenticated &&
+      !isAdmin &&
+      roles?.includes("investor") &&
+      roles?.includes("entrepreneur") &&
+      activeRole === "entrepreneur"
+    ) {
+      e.preventDefault();
+      setInvestorDropdownOpen(false);
+      setMobileMenuOpen(false);
+      setRoleSwitchModalConfig({
+        isOpen: true,
+        targetRole: "investor",
+        targetPath: "/profile/investor",
+      });
+      return;
+    }
+    setInvestorDropdownOpen(false);
+    setMobileMenuOpen(false);
+  };
 
   useEffect(() => {
     const handleScroll = () => {
@@ -36,7 +88,19 @@ export function Navbar({ className, hideAuth = false }: NavbarProps) {
     setMobileMenuOpen(false);
     setInvestorDropdownOpen(false);
     setEntrepreneurDropdownOpen(false);
+    setRoleDropdownOpen(false);
   }, [pathname]);
+
+  // Handle click outside for role dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (roleDropdownRef.current && !roleDropdownRef.current.contains(e.target as Node)) {
+        setRoleDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const handleInvestorDropdownEnter = () => {
     if (investorTimeoutRef.current) clearTimeout(investorTimeoutRef.current);
@@ -79,21 +143,22 @@ export function Navbar({ className, hideAuth = false }: NavbarProps) {
   };
 
   return (
-    <header
-      className={cn(
+    <>
+      <header
+        className={cn(
         "sticky top-0 w-full z-50 transition-all duration-200 bg-[#F4FAFD]/95 backdrop-blur-md border-b border-[#DCECF2]",
         scrolled ? "shadow-sm" : "",
         className
       )}
     >
-      <div className="w-full max-w-[1280px] mx-auto px-5 sm:px-8 lg:px-12 py-4 flex items-center justify-between">
+      <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 py-3.5 sm:py-4 flex items-center justify-between">
         {/* Official Brand Logo */}
-        <Link href="/" className="flex items-center group transition-opacity hover:opacity-90">
+        <Link href="/" className="flex items-center group transition-opacity hover:opacity-90 shrink-0 mr-4 lg:mr-8 xl:mr-10">
           <BrandLogo size="md" showTagline={false} />
         </Link>
 
         {/* Center Desktop Navigation Links */}
-        <nav className="hidden lg:flex items-center gap-7 xl:gap-9">
+        <nav className="hidden lg:flex items-center justify-center gap-4 xl:gap-7 2xl:gap-8 flex-1 min-w-0 mx-2">
           {navLinks.map((link) => {
             const active = isActive(link.href);
 
@@ -101,14 +166,14 @@ export function Navbar({ className, hideAuth = false }: NavbarProps) {
               return (
                 <div
                   key={link.name}
-                  className="relative group py-1"
+                  className="relative group py-1 shrink-0"
                   onMouseEnter={handleEntrepreneurDropdownEnter}
                   onMouseLeave={handleEntrepreneurDropdownLeave}
                 >
                   <Link
                     href={link.href}
                     className={cn(
-                      "text-[14.5px] transition-colors py-1 relative font-normal select-none inline-flex items-center gap-1",
+                      "text-[13.5px] xl:text-[14.5px] whitespace-nowrap shrink-0 transition-colors py-1 relative font-normal select-none inline-flex items-center gap-1",
                       active
                         ? "text-[#00658F] font-bold"
                         : "text-[#5F7180] hover:text-[#0A192A]"
@@ -165,7 +230,7 @@ export function Navbar({ className, hideAuth = false }: NavbarProps) {
                           {/* 2. List Your Venture */}
                           <Link
                             href="/profile/listings"
-                            onClick={() => setEntrepreneurDropdownOpen(false)}
+                            onClick={handleListVentureClick}
                             className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-[#F4FAFD] transition-colors group/item"
                           >
                             <div className="w-9 h-9 rounded-xl bg-[#EBF6FC] text-[#00A6E8] group-hover/item:bg-[#00A6E8] group-hover/item:text-white flex items-center justify-center shrink-0 transition-colors shadow-xs">
@@ -192,14 +257,14 @@ export function Navbar({ className, hideAuth = false }: NavbarProps) {
               return (
                 <div
                   key={link.name}
-                  className="relative group py-1"
+                  className="relative group py-1 shrink-0"
                   onMouseEnter={handleInvestorDropdownEnter}
                   onMouseLeave={handleInvestorDropdownLeave}
                 >
                   <Link
                     href={link.href}
                     className={cn(
-                      "text-[14.5px] transition-colors py-1 relative font-normal select-none inline-flex items-center gap-1",
+                      "text-[13.5px] xl:text-[14.5px] whitespace-nowrap shrink-0 transition-colors py-1 relative font-normal select-none inline-flex items-center gap-1",
                       active
                         ? "text-[#00658F] font-bold"
                         : "text-[#5F7180] hover:text-[#0A192A]"
@@ -256,7 +321,7 @@ export function Navbar({ className, hideAuth = false }: NavbarProps) {
                           {/* 2. Create Investor Profile */}
                           <Link
                             href="/profile/investor"
-                            onClick={() => setInvestorDropdownOpen(false)}
+                            onClick={handleInvestorProfileClick}
                             className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-[#F4FAFD] transition-colors group/item"
                           >
                             <div className="w-9 h-9 rounded-xl bg-[#EBF6FC] text-[#00A6E8] group-hover/item:bg-[#00A6E8] group-hover/item:text-white flex items-center justify-center shrink-0 transition-colors shadow-xs">
@@ -284,7 +349,7 @@ export function Navbar({ className, hideAuth = false }: NavbarProps) {
                 key={link.name}
                 href={link.href}
                 className={cn(
-                  "text-[14.5px] transition-colors py-1 relative font-normal select-none",
+                  "text-[13.5px] xl:text-[14.5px] whitespace-nowrap shrink-0 transition-colors py-1 relative font-normal select-none",
                   active
                     ? "text-[#00658F] font-bold"
                     : "text-[#5F7180] hover:text-[#0A192A]"
@@ -305,22 +370,104 @@ export function Navbar({ className, hideAuth = false }: NavbarProps) {
 
         {/* Right CTA */}
         {!hideAuth && (
-          <div className="hidden lg:flex items-center gap-3">
+          <div className="hidden lg:flex items-center gap-2.5 xl:gap-3 shrink-0 ml-4 lg:ml-6 xl:ml-8">
             {isAuthenticated ? (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 xl:gap-2.5 whitespace-nowrap shrink-0">
                 {isAdmin && (
                   <Link
                     href="/admin"
-                    className="px-3 py-1.5 rounded-md text-xs font-bold text-[#00658F] bg-[#F4FAFD] border border-[#DCECF2] hover:bg-[#EBF6FC] flex items-center gap-1 transition-colors"
+                    className="px-3 py-1.5 rounded-md text-xs font-bold text-[#00658F] bg-[#F4FAFD] border border-[#DCECF2] hover:bg-[#EBF6FC] flex items-center gap-1 transition-colors whitespace-nowrap shrink-0"
                   >
                     <span className="material-symbols-outlined text-[16px]">shield_person</span>
                     <span>Admin</span>
                   </Link>
                 )}
 
+                {/* Multi-Role Switcher / Active Role Badge */}
+                {roles.includes("investor") && roles.includes("entrepreneur") ? (
+                  <div className="relative shrink-0" ref={roleDropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
+                      className="px-2.5 py-1.5 rounded-md text-xs font-bold text-[#00658F] bg-[#EBF6FC] hover:bg-[#DCECF2] border border-[#DCECF2] flex items-center gap-1.5 transition-colors whitespace-nowrap cursor-pointer"
+                      title="Switch active platform role"
+                    >
+                      <span className="material-symbols-outlined text-[16px] text-[#00A6E8]">
+                        {activeRole === "investor" ? "explore" : "rocket_launch"}
+                      </span>
+                      <span className="capitalize">{activeRole}</span>
+                      <span className="material-symbols-outlined text-[14px]">expand_more</span>
+                    </button>
+                    <AnimatePresence>
+                      {roleDropdownOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 4, scale: 0.95 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: 4, scale: 0.95 }}
+                          className="absolute right-0 mt-1.5 w-44 bg-white border border-[#DCECF2] rounded-xl shadow-lg p-1.5 z-50 space-y-1"
+                        >
+                          <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[#5F7180]">
+                            Active Role
+                          </div>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              setRoleDropdownOpen(false);
+                              if (activeRole !== "entrepreneur") {
+                                await switchActiveRole("entrepreneur");
+                              }
+                            }}
+                            className={cn(
+                              "w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer",
+                              activeRole === "entrepreneur"
+                                ? "bg-[#EBF6FC] text-[#00658F]"
+                                : "text-[#0A192A] hover:bg-[#F4FAFD]"
+                            )}
+                          >
+                            <span className="flex items-center gap-2">
+                              <span className="material-symbols-outlined text-[15px]">rocket_launch</span>
+                              <span>Entrepreneur</span>
+                            </span>
+                            {activeRole === "entrepreneur" && (
+                              <span className="material-symbols-outlined text-[15px]">check</span>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              setRoleDropdownOpen(false);
+                              if (activeRole !== "investor") {
+                                await switchActiveRole("investor");
+                              }
+                            }}
+                            className={cn(
+                              "w-full text-left px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer",
+                              activeRole === "investor"
+                                ? "bg-[#EBF6FC] text-[#00658F]"
+                                : "text-[#0A192A] hover:bg-[#F4FAFD]"
+                            )}
+                          >
+                            <span className="flex items-center gap-2">
+                              <span className="material-symbols-outlined text-[15px]">explore</span>
+                              <span>Investor</span>
+                            </span>
+                            {activeRole === "investor" && (
+                              <span className="material-symbols-outlined text-[15px]">check</span>
+                            )}
+                          </button>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                ) : (
+                  <span className="px-2.5 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider bg-[#F4FAFD] text-[#5F7180] border border-[#DCECF2] whitespace-nowrap shrink-0">
+                    {activeRole || "Member"}
+                  </span>
+                )}
+
                 <Link
                   href="/profile"
-                  className="px-3.5 py-1.5 rounded-md text-xs font-bold text-[#0A192A] hover:text-[#00A6E8] flex items-center gap-1.5 transition-colors border border-transparent hover:border-[#DCECF2]"
+                  className="px-3.5 py-1.5 rounded-md text-xs font-bold text-[#0A192A] hover:text-[#00A6E8] flex items-center gap-1.5 transition-colors border border-transparent hover:border-[#DCECF2] whitespace-nowrap shrink-0"
                 >
                   <span className="material-symbols-outlined text-[18px] text-[#00A6E8]">
                     person
@@ -330,7 +477,7 @@ export function Navbar({ className, hideAuth = false }: NavbarProps) {
                 <button
                   type="button"
                   onClick={() => signOut()}
-                  className="bg-white border border-[#DCECF2] hover:border-red-300 hover:text-red-600 text-[#0A192A] px-3.5 py-1.5 rounded-md text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                  className="bg-white border border-[#DCECF2] hover:border-red-300 hover:text-red-600 text-[#0A192A] px-3.5 py-1.5 rounded-md text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-[16px]">logout</span>
                   <span>Sign Out</span>
@@ -339,7 +486,7 @@ export function Navbar({ className, hideAuth = false }: NavbarProps) {
             ) : (
               <Link
                 href="/signup"
-                className="bg-[#00A6E8] hover:bg-[#0093CE] text-white px-5 py-2 rounded-md text-sm font-bold tracking-normal transition-all duration-200 shadow-sm shadow-[#00A6E8]/20 hover:shadow"
+                className="bg-[#00A6E8] hover:bg-[#0093CE] text-white px-5 py-2 rounded-md text-sm font-bold tracking-normal transition-all duration-200 shadow-sm shadow-[#00A6E8]/20 hover:shadow whitespace-nowrap shrink-0"
               >
                 Join Wenture India
               </Link>
@@ -447,7 +594,7 @@ export function Navbar({ className, hideAuth = false }: NavbarProps) {
                         {/* 2. List Your Venture */}
                         <Link
                           href="/profile/listings"
-                          onClick={() => setMobileMenuOpen(false)}
+                          onClick={handleListVentureClick}
                           className={cn(
                             "text-xs py-2 px-3 rounded-xl flex items-start gap-2.5 transition-colors",
                             pathname.startsWith("/profile/listings")
@@ -492,7 +639,7 @@ export function Navbar({ className, hideAuth = false }: NavbarProps) {
                         {/* 2. Create Investor Profile */}
                         <Link
                           href="/profile/investor"
-                          onClick={() => setMobileMenuOpen(false)}
+                          onClick={handleInvestorProfileClick}
                           className={cn(
                             "text-xs py-2 px-3 rounded-xl flex items-start gap-2.5 transition-colors",
                             pathname.startsWith("/profile/investor")
@@ -520,6 +667,52 @@ export function Navbar({ className, hideAuth = false }: NavbarProps) {
                 <div className="pt-2 flex flex-col gap-2">
                   {isAuthenticated ? (
                     <>
+                      {/* Mobile Multi-Role Switcher */}
+                      {roles.includes("investor") && roles.includes("entrepreneur") && (
+                        <div className="bg-[#F4FAFD] border border-[#DCECF2] rounded-xl p-2.5 space-y-2">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-[#5F7180] px-1 flex items-center justify-between">
+                            <span>Active Platform Role</span>
+                            <span className="capitalize text-[#00658F] font-extrabold">{activeRole}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (activeRole !== "entrepreneur") {
+                                  await switchActiveRole("entrepreneur");
+                                }
+                              }}
+                              className={cn(
+                                "py-2 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors",
+                                activeRole === "entrepreneur"
+                                  ? "bg-[#00A6E8] text-white shadow-xs"
+                                  : "bg-white text-[#0A192A] border border-[#DCECF2]"
+                              )}
+                            >
+                              <span className="material-symbols-outlined text-[15px]">rocket_launch</span>
+                              <span>Entrepreneur</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (activeRole !== "investor") {
+                                  await switchActiveRole("investor");
+                                }
+                              }}
+                              className={cn(
+                                "py-2 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-colors",
+                                activeRole === "investor"
+                                  ? "bg-[#00A6E8] text-white shadow-xs"
+                                  : "bg-white text-[#0A192A] border border-[#DCECF2]"
+                              )}
+                            >
+                              <span className="material-symbols-outlined text-[15px]">explore</span>
+                              <span>Investor</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       <Link
                         href="/profile"
                         onClick={() => setMobileMenuOpen(false)}
@@ -565,6 +758,18 @@ export function Navbar({ className, hideAuth = false }: NavbarProps) {
           </motion.div>
         )}
       </AnimatePresence>
-    </header>
+
+      </header>
+
+      {/* Cross-Role Navigation Confirmation Modal */}
+      {roleSwitchModalConfig && (
+        <RoleSwitchModal
+          isOpen={roleSwitchModalConfig.isOpen}
+          targetRole={roleSwitchModalConfig.targetRole}
+          targetPath={roleSwitchModalConfig.targetPath}
+          onClose={() => setRoleSwitchModalConfig(null)}
+        />
+      )}
+    </>
   );
 }

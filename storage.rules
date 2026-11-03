@@ -1,0 +1,49 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Confidential Pitch Decks: Authenticated access only, max 20MB, PDF only
+    match /pitchDecks/{folderId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated()
+                   && request.resource.size <= 20 * 1024 * 1024
+                   && request.resource.contentType == 'application/pdf';
+    }
+
+    // Public Listing Images: Public read, authenticated write, max 5MB, image only
+    match /listings/{folderId}/{fileName} {
+      allow read: if true;
+      allow write: if isAuthenticated()
+                   && request.resource.size <= 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // Investor Profile Avatars: Public read, owner write, max 5MB, image only
+    match /investorProfiles/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isOwner(userId)
+                   && request.resource.size <= 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // Confidential Verification Documents: Owner-only read/write, max 10MB
+    match /verifications/{userId}/{fileName} {
+      allow read, write: if isOwner(userId)
+                         && request.resource.size <= 10 * 1024 * 1024;
+    }
+
+    // Deny all other paths by default
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
+

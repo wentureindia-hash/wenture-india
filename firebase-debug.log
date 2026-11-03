@@ -1,0 +1,16 @@
+[debug] [2026-11-03T07:59:47.592Z] ----------------------------------------------------------------------
+[debug] [2026-11-03T07:59:47.594Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\DELL\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js emulators:exec --project wenture-india --only firestore node -e 'console.log(" EMULATOR_WORKS\)'
+[debug] [2026-11-03T07:59:47.594Z] CLI Version:   15.23.0
+[debug] [2026-11-03T07:59:47.594Z] Platform:      win32
+[debug] [2026-11-03T07:59:47.594Z] Node Version:  v20.19.1
+[debug] [2026-11-03T07:59:47.594Z] Detected Agent: antigravity
+[debug] [2026-11-03T07:59:47.594Z] Time:          Tue Nov 03 2026 13:29:47 GMT+0530 (India Standard Time)
+[debug] [2026-11-03T07:59:47.594Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-11-03T07:59:47.604Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2026-11-03T07:59:49.011Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-11-03T07:59:49.044Z] *** [apiv2] error from fetch(https://firebase-public.firebaseio.com/cli.json, {"headers":{},"method":"GET","dispatcher":{"_events":{},"_eventsCount":0}}): Error: connect EACCES 127.0.0.1:65463
+[warn] !  Unable to fetch the CLI MOTD and remote config. This is not a fatal error, but may indicate an issue with your network connection. 
+[debug] [2026-11-03T07:59:49.045Z] Failed to fetch MOTD FirebaseError: Failed to make request to https://firebase-public.firebaseio.com/cli.json
+[debug] Failed to authenticate, have you run firebase login?
+[warn] !  emulators: You are not currently authenticated so some features may not work correctly. Please run firebase login to authenticate the CLI. 

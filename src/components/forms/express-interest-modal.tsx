@@ -5,8 +5,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { AnimatePresence, motion } from "framer-motion";
+import Link from "next/link";
 import { InvestorProfile, submitInvestorEnquiry } from "@/lib/firebase/investors";
 import { useAuth } from "@/lib/firebase/auth-context";
+import { RoleSwitchModal } from "@/components/profile/role-switch-modal";
 
 const interestSchema = z.object({
   name: z.string().min(2, "Please enter your name"),
@@ -28,10 +30,15 @@ export function ExpressInterestModal({
   isOpen,
   onClose,
 }: ExpressInterestModalProps) {
-  const { user, profile } = useAuth();
+  const { user, profile, roles, activeRole, isInvestor, isAuthenticated } = useAuth();
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [roleSwitchModalOpen, setRoleSwitchModalOpen] = useState(false);
+
+  const isOwnProfile = !!user && !!investor && (investor.userId === user.uid || investor.id === user.uid);
+  const isDualRole = roles.includes("investor") && roles.includes("entrepreneur");
+  const isBlockedInvestor = !isOwnProfile && (activeRole === "investor" || isInvestor);
 
   const {
     register,
@@ -50,6 +57,36 @@ export function ExpressInterestModal({
 
   const onSubmit = async (data: InterestFormData) => {
     if (!investor) return;
+
+    if (!user) {
+      setErrorMsg("Authentication required. Please sign in with an Entrepreneur account to express interest.");
+      return;
+    }
+
+    if (isOwnProfile) {
+      setErrorMsg("You cannot submit an expression of interest to your own investor profile.");
+      return;
+    }
+
+    const currentActiveRole = (profile?.activeRole || profile?.role || "").toString().toLowerCase().trim();
+    const userRoles: string[] = (
+      Array.isArray(profile?.roles) && profile.roles.length > 0
+        ? profile.roles
+        : profile?.role
+        ? [profile.role]
+        : []
+    ).map((r) => r.toLowerCase().trim());
+
+    if (!userRoles.includes("entrepreneur")) {
+      setErrorMsg("Access restricted: Only users with the Entrepreneur role can express interest in investors. Investor-to-investor expressions of interest are not permitted.");
+      return;
+    }
+
+    if (currentActiveRole !== "entrepreneur") {
+      setErrorMsg("Please switch to Entrepreneur Mode to express interest. Expressions of interest cannot be submitted while operating in Investor Mode.");
+      return;
+    }
+
     setLoading(true);
     setErrorMsg(null);
 
@@ -168,6 +205,66 @@ export function ExpressInterestModal({
                   </div>
                 )}
 
+                {/* Authentication & Role-Based Warning Banners */}
+                {!isAuthenticated ? (
+                  <div className="p-4 bg-[#EBF6FC] border border-[#DCECF2] rounded-2xl space-y-2 mb-2">
+                    <div className="flex items-center gap-2 text-[#00658F] font-bold text-xs">
+                      <span className="material-symbols-outlined text-[18px]">lock</span>
+                      <span>Sign In Required</span>
+                    </div>
+                    <p className="text-xs text-[#5F7180] leading-relaxed">
+                      Only registered entrepreneurs can submit an expression of interest to investors. Please sign in or create an entrepreneur account to proceed.
+                    </p>
+                    <div className="pt-1">
+                      <Link
+                        href={`/login?redirect=/investors/${investor.id}`}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#00A6E8] hover:bg-[#0093CE] text-white rounded-xl text-xs font-bold transition-colors shadow-xs"
+                      >
+                        <span className="material-symbols-outlined text-[15px]">login</span>
+                        <span>Sign In as Entrepreneur</span>
+                      </Link>
+                    </div>
+                  </div>
+                ) : isBlockedInvestor ? (
+                  isDualRole ? (
+                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl space-y-2 mb-2">
+                      <div className="flex items-center gap-2 text-amber-900 font-bold text-xs">
+                        <span className="material-symbols-outlined text-[18px] text-amber-700">swap_horiz</span>
+                        <span>Switch to Entrepreneur Mode to Express Interest</span>
+                      </div>
+                      <p className="text-xs text-amber-900/90 leading-relaxed">
+                        You are currently in <strong>Investor Mode</strong>. Investors cannot express interest in other capital partners. To introduce your venture, please switch to <strong>Entrepreneur Mode</strong>.
+                      </p>
+                      <div className="pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setRoleSwitchModalOpen(true)}
+                          className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined text-[15px]">rocket_launch</span>
+                          <span>Switch to Entrepreneur Mode Now</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2 mb-2">
+                      <div className="flex items-center gap-2 text-slate-800 font-bold text-xs">
+                        <span className="material-symbols-outlined text-[18px] text-slate-600">block</span>
+                        <span>Investor-to-Investor Expressions of Interest Disabled</span>
+                      </div>
+                      <p className="text-xs text-[#5F7180] leading-relaxed">
+                        Expressing interest is reserved exclusively for entrepreneurs seeking capital. Accounts with only the Investor role cannot submit expressions of interest to other investors.
+                      </p>
+                      <p className="text-[11px] text-slate-500 pt-0.5">
+                        Seeking capital for a venture? You can add the Entrepreneur role in your{" "}
+                        <Link href="/profile" className="text-[#00A6E8] underline font-semibold">
+                          Account Profile
+                        </Link>.
+                      </p>
+                    </div>
+                  )
+                ) : null}
+
                 {/* Pre-populated Investor Snapshot */}
                 <div className="p-3.5 bg-[#F4FAFD] border border-[#DCECF2] rounded-xl flex items-center justify-between text-xs mb-2">
                   <div>
@@ -256,8 +353,8 @@ export function ExpressInterestModal({
 
                   <button
                     type="submit"
-                    disabled={loading}
-                    className="px-6 py-2.5 bg-[#00A6E8] hover:bg-[#0093CE] text-white text-xs font-bold rounded-xl transition-colors shadow-sm disabled:opacity-50 flex items-center gap-1.5"
+                    disabled={loading || isBlockedInvestor || !isAuthenticated}
+                    className="px-6 py-2.5 bg-[#00A6E8] hover:bg-[#0093CE] text-white text-xs font-bold rounded-xl transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 cursor-pointer"
                   >
                     {loading ? (
                       <>
@@ -277,6 +374,16 @@ export function ExpressInterestModal({
           </div>
         </motion.div>
       </div>
+
+      {/* Role Switch Modal for Dual-Role Users */}
+      {roleSwitchModalOpen && (
+        <RoleSwitchModal
+          isOpen={roleSwitchModalOpen}
+          targetRole="entrepreneur"
+          onClose={() => setRoleSwitchModalOpen(false)}
+          onSuccess={() => setRoleSwitchModalOpen(false)}
+        />
+      )}
     </AnimatePresence>
   );
 }

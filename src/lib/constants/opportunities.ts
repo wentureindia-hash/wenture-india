@@ -46,6 +46,7 @@ export interface Opportunity {
   contactPhone?: string;
   contactEmail?: string;
   whatsappNumber?: string;
+  hasPitchDeck?: boolean;
   pitchDeckUrl?: string;
   pitchDeckFileName?: string;
 }

@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { name: "Dashboard", href: "/admin", icon: "dashboard" },
   { name: "Listings", href: "/admin/listings", icon: "storefront" },
   { name: "Investors", href: "/admin/investors", icon: "badge" },
+  { name: "Verifications", href: "/admin/verifications", icon: "verified" },
   { name: "Users", href: "/admin/users", icon: "group" },
   { name: "Opportunities", href: "/admin/opportunities", icon: "trending_up" },
   { name: "Featured Content", href: "/admin/featured", icon: "stars" },

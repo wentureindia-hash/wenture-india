@@ -1,9 +1,14 @@
-import React from "react";
+"use client";
+
+import React, { useState } from "react";
 import Link from "next/link";
 import { COMPANY } from "@/lib/constants/company";
 import { BrandLogo } from "@/components/brand-logo";
+import { LegalModal } from "@/components/legal-modal";
 
 export function Footer() {
+  const [legalModal, setLegalModal] = useState<"privacy" | "terms" | null>(null);
+
   return (
     <footer className="bg-on-surface text-surface mt-auto border-t border-secondary/20">
       <div className="w-full max-w-container-max mx-auto px-3.5 sm:px-6 md:px-margin-desktop py-12 sm:py-16 md:py-20">
@@ -112,16 +117,38 @@ export function Footer() {
               <Link href="/signup" className="font-body-md text-sm text-surface-variant hover:text-primary-container transition-colors duration-200">
                 Register Profile
               </Link>
+              <button
+                type="button"
+                onClick={() => setLegalModal("privacy")}
+                className="font-body-md text-sm text-surface-variant hover:text-primary-container transition-colors duration-200 text-left cursor-pointer"
+              >
+                Privacy Policy
+              </button>
+              <button
+                type="button"
+                onClick={() => setLegalModal("terms")}
+                className="font-body-md text-sm text-surface-variant hover:text-primary-container transition-colors duration-200 text-left cursor-pointer"
+              >
+                Terms of Service
+              </button>
               <Link href="/contact" className="font-body-md text-sm text-surface-variant hover:text-primary-container transition-colors duration-200">
                 Direct Inquiry
               </Link>
-              <span className="font-body-md text-xs text-surface-variant/70 pt-4 leading-relaxed">
+              <span className="font-body-md text-xs text-surface-variant/70 pt-3 leading-relaxed">
                 Institutional investment matching platform. All trademarks and brand names belong to their respective owners.
               </span>
             </div>
           </div>
         </div>
       </div>
+
+      {legalModal && (
+        <LegalModal
+          isOpen={Boolean(legalModal)}
+          onClose={() => setLegalModal(null)}
+          type={legalModal}
+        />
+      )}
     </footer>
   );
 }

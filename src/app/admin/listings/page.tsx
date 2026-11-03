@@ -7,6 +7,7 @@ import {
   approveListing,
   rejectListing,
   deleteListing,
+  getListingPitchDeck,
   BusinessListing,
   ListingStatus,
 } from "@/lib/firebase/listings";
@@ -19,6 +20,30 @@ export default function AdminListingsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedListing, setSelectedListing] = useState<BusinessListing | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [openingDeck, setOpeningDeck] = useState(false);
+  const [adminDeckError, setAdminDeckError] = useState<string | null>(null);
+
+  const handleAdminViewDeck = async (listing: BusinessListing) => {
+    if (listing.pitchDeckUrl) {
+      window.open(listing.pitchDeckUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+    if (!listing.id) return;
+    setOpeningDeck(true);
+    setAdminDeckError(null);
+    try {
+      const res = await getListingPitchDeck(listing.id);
+      if (res.url) {
+        window.open(res.url, "_blank", "noopener,noreferrer");
+      } else {
+        setAdminDeckError(res.error || "Unable to retrieve pitch deck.");
+      }
+    } catch {
+      setAdminDeckError("Failed to open pitch deck document.");
+    } finally {
+      setOpeningDeck(false);
+    }
+  };
 
   // Reject modal state
   const [rejectingListing, setRejectingListing] = useState<BusinessListing | null>(null);
@@ -215,19 +240,42 @@ export default function AdminListingsPage() {
                       </td>
 
                       <td className="py-4 px-4">
-                        <span className={`px-2.5 py-0.5 rounded text-[10px] font-extrabold uppercase border ${statusBadge}`}>
-                          {item.status}
-                        </span>
+                        <div className="flex flex-col gap-1 items-start">
+                          <span className={`px-2.5 py-0.5 rounded text-[10px] font-extrabold uppercase border ${statusBadge}`}>
+                            {item.status}
+                          </span>
+                          {item.hasPendingEdits && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-0.5">
+                              <span className="material-symbols-outlined text-[12px] text-amber-600">pending_actions</span>
+                              <span>Revisions</span>
+                            </span>
+                          )}
+                          {item.isVerified && (
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-0.5">
+                              <span className="material-symbols-outlined text-[11px] text-blue-600">verified</span>
+                              <span>Verified</span>
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       <td className="py-4 px-4 sm:px-6 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {/* View details button */}
+                        <div className="flex items-center justify-end gap-2">
+                          {/* Direct link to dedicated review page */}
+                          <Link
+                            href={`/admin/listings/${item.id}`}
+                            className="px-3 py-1.5 bg-[#EBF6FC] hover:bg-[#00A6E8] text-[#00658F] hover:text-white border border-[#00A6E8]/20 rounded-xl text-xs font-bold transition-all flex items-center gap-1 shadow-2xs cursor-pointer"
+                          >
+                            <span>Review</span>
+                            <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                          </Link>
+
+                          {/* Quick details preview button */}
                           <button
                             type="button"
                             onClick={() => setSelectedListing(item)}
-                            className="p-1.5 text-slate-500 hover:text-[#00A6E8] hover:bg-slate-100 rounded-lg transition-colors"
-                            title="View Full Details"
+                            className="p-1.5 text-slate-500 hover:text-[#00A6E8] hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                            title="Quick Preview"
                           >
                             <span className="material-symbols-outlined text-[18px]">visibility</span>
                           </button>
@@ -238,7 +286,7 @@ export default function AdminListingsPage() {
                               type="button"
                               disabled={actionLoading === item.id}
                               onClick={() => handleApprove(item.id)}
-                              className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 hover:border-emerald-600 text-[11px] font-bold rounded-lg transition-colors disabled:opacity-50"
+                              className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-600 text-emerald-700 hover:text-white border border-emerald-200 hover:border-emerald-600 text-[11px] font-bold rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
                             >
                               Approve
                             </button>
@@ -253,7 +301,7 @@ export default function AdminListingsPage() {
                                 setRejectingListing(item);
                                 setRejectReason("");
                               }}
-                              className="px-2.5 py-1 bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 hover:border-rose-600 text-[11px] font-bold rounded-lg transition-colors disabled:opacity-50"
+                              className="px-2.5 py-1 bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 hover:border-rose-600 text-[11px] font-bold rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
                             >
                               Reject
                             </button>
@@ -264,7 +312,7 @@ export default function AdminListingsPage() {
                             type="button"
                             disabled={actionLoading === item.id}
                             onClick={() => handleDelete(item.id)}
-                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                             title="Delete Listing"
                           >
                             <span className="material-symbols-outlined text-[18px]">delete</span>
@@ -368,7 +416,7 @@ export default function AdminListingsPage() {
 
               <div className="space-y-4 sm:space-y-5 text-xs text-[#5F7180] overflow-y-auto pr-1">
                 {/* Pitch Deck Notice / Button */}
-                {selectedListing.pitchDeckUrl && (
+                {(selectedListing.hasPitchDeck || selectedListing.pitchDeckUrl) && (
                   <div className="p-3.5 sm:p-4 bg-rose-50 border border-rose-200 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                     <div className="flex items-start sm:items-center gap-3">
                       <span className="material-symbols-outlined text-[26px] text-rose-600 shrink-0">picture_as_pdf</span>
@@ -377,17 +425,22 @@ export default function AdminListingsPage() {
                           {selectedListing.pitchDeckFileName || "Attached Company Pitch Deck (PDF)"}
                         </strong>
                         <span className="text-[11px] text-rose-800">Uploaded pitch deck document available for admin review</span>
+                        {adminDeckError && (
+                          <p className="text-[11px] text-rose-700 mt-1 font-medium">{adminDeckError}</p>
+                        )}
                       </div>
                     </div>
-                    <a
-                      href={selectedListing.pitchDeckUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full sm:w-auto px-3.5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 shrink-0 shadow-xs"
+                    <button
+                      type="button"
+                      onClick={() => handleAdminViewDeck(selectedListing)}
+                      disabled={openingDeck}
+                      className="w-full sm:w-auto px-3.5 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 shrink-0 shadow-xs cursor-pointer"
                     >
-                      <span className="material-symbols-outlined text-[16px]">visibility</span>
-                      <span>View Deck</span>
-                    </a>
+                      <span className="material-symbols-outlined text-[16px]">
+                        {openingDeck ? "sync" : "visibility"}
+                      </span>
+                      <span>{openingDeck ? "Loading..." : "View Deck"}</span>
+                    </button>
                   </div>
                 )}
 
@@ -486,30 +539,54 @@ export default function AdminListingsPage() {
                     <strong>Rejection Reason:</strong> {selectedListing.rejectionReason}
                   </div>
                 )}
+                {/* Image Assets Preview */}
+                {selectedListing.images && selectedListing.images.length > 0 && (
+                  <div>
+                    <strong className="text-[#0A192A] block mb-2 text-xs">Submitted Image Assets:</strong>
+                    <div className="grid grid-cols-3 gap-2">
+                      {selectedListing.images.map((img, idx) => (
+                        <div key={idx} className="aspect-video rounded-lg overflow-hidden border border-[#DCECF2] bg-slate-100">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={img} alt="listing visual" className="w-full h-full object-cover" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2.5 sm:gap-3 pt-4 sm:pt-6 border-t border-[#DCECF2] mt-4 sm:mt-6 shrink-0">
-                {selectedListing.status !== "published" && (
-                  <button
-                    type="button"
-                    onClick={() => handleApprove(selectedListing.id)}
-                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors text-center shadow-sm"
-                  >
-                    Approve &amp; Publish
-                  </button>
-                )}
-                {selectedListing.status !== "rejected" && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRejectingListing(selectedListing);
-                      setRejectReason("");
-                    }}
-                    className="px-5 py-2.5 bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 text-xs font-bold rounded-xl transition-colors text-center"
-                  >
-                    Reject with Feedback
-                  </button>
-                )}
+              <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 pt-4 sm:pt-6 border-t border-[#DCECF2] mt-4 sm:mt-6 shrink-0">
+                <Link
+                  href={`/admin/listings/${selectedListing.id}`}
+                  className="px-4 py-2.5 bg-[#EBF6FC] hover:bg-[#00A6E8] text-[#00658F] hover:text-white border border-[#00A6E8]/20 rounded-xl text-xs font-bold transition-all text-center flex items-center justify-center gap-1.5 shadow-2xs"
+                >
+                  <span>Open Full Review Dossier (7 Sections)</span>
+                  <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+                </Link>
+
+                <div className="flex items-center gap-2">
+                  {selectedListing.status !== "published" && (
+                    <button
+                      type="button"
+                      onClick={() => handleApprove(selectedListing.id)}
+                      className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors text-center shadow-sm cursor-pointer"
+                    >
+                      Approve
+                    </button>
+                  )}
+                  {selectedListing.status !== "rejected" && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRejectingListing(selectedListing);
+                        setRejectReason("");
+                      }}
+                      className="px-4 py-2.5 bg-rose-50 hover:bg-rose-600 text-rose-700 hover:text-white border border-rose-200 text-xs font-bold rounded-xl transition-colors text-center cursor-pointer"
+                    >
+                      Reject
+                    </button>
+                  )}
+                </div>
               </div>
             </motion.div>
           </div>

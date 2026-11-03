@@ -15,10 +15,57 @@ import {
   getMyInvestorProfile,
   saveInvestorProfile,
   uploadInvestorProfileImage,
+  validateInvestorWhatsAppPhone,
+  normalizeInvestorWhatsAppPhone,
 } from "@/lib/firebase/investors";
 import { SECTORS } from "@/lib/constants/sectors";
 import { motion } from "framer-motion";
 import { FileUploadField, UploadStatus } from "@/components/ui/file-upload-field";
+import { RoleSwitchModal } from "@/components/profile/role-switch-modal";
+
+const COUNTRY_DIAL_CODES = [
+  { code: "+91", country: "India", flag: "🇮🇳" },
+  { code: "+1", country: "USA / Canada", flag: "🇺🇸" },
+  { code: "+44", country: "United Kingdom", flag: "🇬🇧" },
+  { code: "+971", country: "UAE", flag: "🇦🇪" },
+  { code: "+65", country: "Singapore", flag: "🇸🇬" },
+  { code: "+61", country: "Australia", flag: "🇦🇺" },
+  { code: "+49", country: "Germany", flag: "🇩🇪" },
+  { code: "+33", country: "France", flag: "🇫🇷" },
+  { code: "+81", country: "Japan", flag: "🇯🇵" },
+  { code: "+852", country: "Hong Kong", flag: "🇭🇰" },
+  { code: "+966", country: "Saudi Arabia", flag: "🇸🇦" },
+  { code: "+974", country: "Qatar", flag: "🇶🇦" },
+  { code: "+60", country: "Malaysia", flag: "🇲🇾" },
+  { code: "+62", country: "Indonesia", flag: "🇮🇩" },
+  { code: "custom", country: "Other (+...)", flag: "🌐" },
+];
+
+function parseInitialPhone(raw?: string): { code: string; number: string } {
+  if (!raw || typeof raw !== "string") return { code: "+91", number: "" };
+  const cleaned = raw.trim();
+  if (cleaned.startsWith("+")) {
+    const knownCodes = ["+971", "+852", "+966", "+974", "+65", "+61", "+49", "+33", "+81", "+60", "+62", "+91", "+44", "+1"];
+    for (const kc of knownCodes) {
+      if (cleaned.startsWith(kc)) {
+        return { code: kc, number: cleaned.slice(kc.length).trim() };
+      }
+    }
+    return { code: "custom", number: cleaned };
+  }
+
+  const digits = cleaned.replace(/\D/g, "");
+  if (digits.startsWith("91") && digits.length === 12) {
+    return { code: "+91", number: digits.slice(2) };
+  }
+  if (digits.startsWith("1") && digits.length === 11) {
+    return { code: "+1", number: digits.slice(1) };
+  }
+  if (digits.length === 10) {
+    return { code: "+91", number: digits };
+  }
+  return { code: "+91", number: cleaned };
+}
 
 export default function ProfileInvestorPage() {
   const router = useRouter();
@@ -26,6 +73,8 @@ export default function ProfileInvestorPage() {
     user,
     profile,
     role,
+    roles,
+    activeRole,
     isInvestor,
     isAdmin,
     loading: authLoading,
@@ -45,8 +94,20 @@ export default function ProfileInvestorPage() {
   const [investorType, setInvestorType] = useState<InvestorType>("Angel Investor");
   const [location, setLocation] = useState("");
   const [contactEmail, setContactEmail] = useState("");
-  const [contactPhone, setContactPhone] = useState("");
+  const [countryCode, setCountryCode] = useState("+91");
+  const [phoneLocalNumber, setPhoneLocalNumber] = useState("");
+  const [whatsAppConsent, setWhatsAppConsent] = useState(true);
   const [contactLinkedin, setContactLinkedin] = useState("");
+
+  // Derived full raw phone string and live international validation
+  const fullContactPhone =
+    countryCode === "custom"
+      ? phoneLocalNumber.trim()
+      : phoneLocalNumber.trim()
+      ? `${countryCode} ${phoneLocalNumber.trim()}`
+      : "";
+
+  const phoneValidation = validateInvestorWhatsAppPhone(fullContactPhone);
 
   // Section 2: Investment Preferences
   const [investmentRange, setInvestmentRange] = useState(INVESTOR_RANGES[1]);
@@ -73,11 +134,20 @@ export default function ProfileInvestorPage() {
 
   const isPendingReview = existingProfile?.status === "pending";
 
-  // User is restricted if their role is not investor and not admin
+  // User is restricted if their role is not investor (or assigned investor) and not admin
+  const hasInvestorAccess = isInvestor || role === "investor" || (roles && roles.includes("investor")) || isAdmin;
   const isRestricted =
     !authLoading &&
     isAuthenticated &&
-    (!isInvestor && role !== "investor" && !isAdmin);
+    !hasInvestorAccess;
+
+  // Multi-role check: user has investor role, but their current activeRole is "entrepreneur"
+  const isMultiRoleNeedingSwitch =
+    !authLoading &&
+    isAuthenticated &&
+    !isAdmin &&
+    hasInvestorAccess &&
+    activeRole === "entrepreneur";
 
   // Route protection
   useEffect(() => {
@@ -90,7 +160,7 @@ export default function ProfileInvestorPage() {
 
   // Load existing profile from Firestore
   useEffect(() => {
-    if (isRestricted) return;
+    if (isRestricted || isMultiRoleNeedingSwitch) return;
     async function load() {
       if (!user) return;
       setLoading(true);
@@ -101,7 +171,15 @@ export default function ProfileInvestorPage() {
         setInvestorType(res.profile.investorType || "Angel Investor");
         setLocation(res.profile.location || "");
         setContactEmail(res.profile.contactEmail || user.email || "");
-        setContactPhone(res.profile.contactPhone || "");
+        if (res.profile.contactPhone) {
+          const parsed = parseInitialPhone(res.profile.contactPhone);
+          setCountryCode(parsed.code);
+          setPhoneLocalNumber(parsed.number);
+        } else {
+          setCountryCode("+91");
+          setPhoneLocalNumber("");
+        }
+        setWhatsAppConsent(res.profile.whatsAppConsent !== false);
         setContactLinkedin(res.profile.contactLinkedin || "");
         setInvestmentRange(res.profile.investmentRange || INVESTOR_RANGES[1]);
         setTypicalInvestmentSize(res.profile.typicalInvestmentSize || "");
@@ -119,7 +197,15 @@ export default function ProfileInvestorPage() {
         setInvestorName(profile?.fullName || profile?.name || "");
         setLocation(profile?.location || "Mumbai, India");
         setContactEmail(user.email || profile?.email || "");
-        setContactPhone(profile?.phone || "");
+        if (profile?.phone) {
+          const parsed = parseInitialPhone(profile.phone);
+          setCountryCode(parsed.code);
+          setPhoneLocalNumber(parsed.number);
+        } else {
+          setCountryCode("+91");
+          setPhoneLocalNumber("");
+        }
+        setWhatsAppConsent(true);
       }
       setLoading(false);
     }
@@ -127,7 +213,7 @@ export default function ProfileInvestorPage() {
     if (user) {
       load();
     }
-  }, [user, profile, isRestricted]);
+  }, [user, profile, isRestricted, isMultiRoleNeedingSwitch]);
 
   const toggleSector = (secName: string) => {
     if (isPendingReview) return;
@@ -145,6 +231,8 @@ export default function ProfileInvestorPage() {
       Boolean(investorType),
       Boolean(location.trim()),
       Boolean(contactEmail.trim()),
+      Boolean(phoneValidation.valid),
+      Boolean(whatsAppConsent),
       Boolean(investmentRange),
       Boolean(typicalInvestmentSize.trim()),
       selectedSectors.length > 0,
@@ -218,6 +306,30 @@ export default function ProfileInvestorPage() {
       return;
     }
 
+    // Mandatory WhatsApp phone validation
+    if (!phoneLocalNumber.trim() && !fullContactPhone) {
+      setErrorMsg("WhatsApp Number is required. Please provide your WhatsApp contact number.");
+      scrollToTarget("field-contact-phone");
+      return;
+    }
+
+    if (!phoneValidation.valid || !phoneValidation.normalized) {
+      setErrorMsg(
+        phoneValidation.error ||
+          "Please enter a valid international WhatsApp phone number (e.g. +91 98765 43210)."
+      );
+      scrollToTarget("field-contact-phone");
+      return;
+    }
+
+    if (!whatsAppConsent) {
+      setErrorMsg(
+        "Consent required: Please authorize public WhatsApp contact so verified entrepreneurs can connect directly."
+      );
+      scrollToTarget("field-whatsapp-consent-container");
+      return;
+    }
+
     setSaving(true);
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -261,8 +373,9 @@ export default function ProfileInvestorPage() {
       investorType,
       location: location.trim(),
       contactEmail: contactEmail.trim() || undefined,
-      contactPhone: contactPhone.trim() || undefined,
+      contactPhone: phoneValidation.normalized,
       contactLinkedin: contactLinkedin.trim() || undefined,
+      whatsAppConsent: true,
       investmentRange,
       typicalInvestmentSize: typicalInvestmentSize.trim() || undefined,
       preferredSectors: selectedSectors,
@@ -283,7 +396,19 @@ export default function ProfileInvestorPage() {
       setErrorMsg(res.error);
       scrollToTarget("investor-feedback-banner");
     } else {
-      setSuccessMsg("Your investor profile has been submitted and is now under administrative review.");
+      if (existingProfile?.status === "changes_requested") {
+        setSuccessMsg(
+          "Your revised profile has been successfully resubmitted and is now awaiting administrator review."
+        );
+      } else if (existingProfile?.status === "rejected") {
+        setSuccessMsg(
+          "Your updated profile has been resubmitted and is now awaiting administrator review."
+        );
+      } else {
+        setSuccessMsg(
+          "Your investor profile has been submitted and is now under administrative review."
+        );
+      }
       scrollToTarget("investor-feedback-banner");
       await refreshProfile();
       // Reload profile to reflect pending state
@@ -309,6 +434,28 @@ export default function ProfileInvestorPage() {
       }
     }
   };
+
+  // If user has both roles and is currently in Entrepreneur mode, require active role switch
+  if (isMultiRoleNeedingSwitch) {
+    return (
+      <div className="flex flex-col min-h-screen bg-[#F6FAFF]">
+        <Navbar />
+        <main className="flex-grow flex items-center justify-center py-24 px-5">
+          <RoleSwitchModal
+            isOpen={true}
+            targetRole="investor"
+            targetPath="/profile/investor"
+            onClose={() => router.push("/profile")}
+          />
+          <div className="text-center">
+            <div className="w-8 h-8 border-3 border-[#00A6E8] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+            <p className="text-xs font-semibold text-[#5F7180]">Switching to Investor mode...</p>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   // If user is signed in as an Entrepreneur (or non-investor), block access and prompt to sign up/in as Investor
   if (isRestricted) {
@@ -428,6 +575,16 @@ export default function ProfileInvestorPage() {
                       Entrepreneurs can now discover your investor profile.
                     </p>
                   </div>
+                ) : existingProfile?.status === "changes_requested" ? (
+                  <div className="sm:text-right">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold tracking-wider bg-purple-50 text-purple-800 border border-purple-200">
+                      <span className="w-2 h-2 rounded-full bg-purple-500" />
+                      REVISION REQUESTED
+                    </span>
+                    <p className="text-[11px] text-purple-700 mt-1 font-medium">
+                      Admin requested updates. Please review feedback, edit and resubmit.
+                    </p>
+                  </div>
                 ) : existingProfile?.status === "rejected" ? (
                   <div className="sm:text-right">
                     <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold tracking-wider bg-rose-50 text-rose-800 border border-rose-200">
@@ -525,6 +682,27 @@ export default function ProfileInvestorPage() {
               </div>
             )}
 
+            {/* Revision Requested Alert if applicable */}
+            {existingProfile?.status === "changes_requested" && (
+              <div className="mt-5 p-4 bg-purple-50 border border-purple-200 text-purple-900 rounded-xl text-xs flex items-start gap-2.5">
+                <span className="material-symbols-outlined text-[20px] text-purple-600 shrink-0">
+                  edit_note
+                </span>
+                <div className="flex-1">
+                  <strong className="block font-bold">Action Required: Revisions Requested by Administrator</strong>
+                  <p className="mt-0.5 text-purple-800">
+                    The admin team has reviewed your profile and requested adjustments before publishing. Please update the necessary fields below and resubmit.
+                  </p>
+                  {existingProfile.revisionFeedback && (
+                    <div className="mt-2 p-2.5 bg-white/80 rounded-lg border border-purple-200 text-purple-950">
+                      <strong className="block text-[10px] uppercase font-bold text-purple-800 mb-0.5">Admin Feedback:</strong>
+                      <p className="font-medium">{existingProfile.revisionFeedback}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Rejection Alert if applicable */}
             {existingProfile?.status === "rejected" && (
               <div className="mt-5 p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex items-start gap-2.5">
@@ -538,6 +716,23 @@ export default function ProfileInvestorPage() {
                       {existingProfile.rejectionReason}
                     </p>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Missing or Invalid WhatsApp Number Banner for Existing Profile */}
+            {existingProfile && !normalizeInvestorWhatsAppPhone(existingProfile.contactPhone) && (
+              <div className="mt-5 p-4 bg-amber-50 border border-amber-300 text-amber-950 rounded-2xl flex items-start gap-3 shadow-xs">
+                <span className="material-symbols-outlined text-[24px] text-amber-700 shrink-0 mt-0.5">
+                  chat
+                </span>
+                <div>
+                  <strong className="block font-bold text-xs uppercase tracking-wider text-amber-900">
+                    Action Required: Add Your WhatsApp Number
+                  </strong>
+                  <p className="mt-1 text-xs text-amber-900/90 leading-relaxed">
+                    Wenture India now connects entrepreneurs and investors directly on WhatsApp. A valid WhatsApp number and public contact consent are now required before your profile can be submitted or reviewed by administrators. Please provide your WhatsApp number below.
+                  </p>
                 </div>
               </div>
             )}
@@ -677,21 +872,64 @@ export default function ProfileInvestorPage() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
+                  <div id="field-contact-phone-container">
                     <label className="block text-xs font-bold text-[#0A192A] mb-1">
-                      Contact Phone (Optional)
+                      WhatsApp Number (Required) *
                     </label>
                     <p className="text-[11px] text-[#5F7180] mb-1.5 leading-snug">
-                      Private phone for verified administrative communications.
+                      Verified direct WhatsApp line used by entrepreneurs to connect regarding opportunities.
                     </p>
-                    <input
-                      type="tel"
-                      value={contactPhone}
-                      onChange={(e) => setContactPhone(e.target.value)}
-                      disabled={isPendingReview || saving}
-                      placeholder="e.g. +91 98765 43210"
-                      className="w-full px-3.5 py-2.5 bg-white border border-[#DCECF2] rounded-xl text-xs sm:text-sm text-[#0A192A] focus:outline-none focus:border-[#00A6E8] disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
-                    />
+                    <div className="flex gap-2">
+                      <select
+                        id="field-country-code"
+                        value={countryCode}
+                        onChange={(e) => setCountryCode(e.target.value)}
+                        disabled={isPendingReview || saving}
+                        className="w-32 sm:w-36 px-2.5 py-2.5 bg-white border border-[#DCECF2] rounded-xl text-xs text-[#0A192A] focus:outline-none focus:border-[#00A6E8] shrink-0"
+                      >
+                        {COUNTRY_DIAL_CODES.map((c) => (
+                          <option key={c.code} value={c.code}>
+                            {c.flag} {c.code} ({c.country})
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        id="field-contact-phone"
+                        type="tel"
+                        value={phoneLocalNumber}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setPhoneLocalNumber(val);
+                          // Auto detect if user pasted '+' with country code
+                          if (val.trim().startsWith("+")) {
+                            setCountryCode("custom");
+                          }
+                        }}
+                        disabled={isPendingReview || saving}
+                        placeholder={countryCode === "+91" ? "98765 43210" : "Mobile number"}
+                        className="flex-1 px-3.5 py-2.5 bg-white border border-[#DCECF2] rounded-xl text-xs sm:text-sm text-[#0A192A] focus:outline-none focus:border-[#00A6E8] disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
+                      />
+                    </div>
+                    {/* Live validation feedback */}
+                    <div className="mt-1.5 text-[11px]">
+                      {phoneLocalNumber.trim() ? (
+                        phoneValidation.valid ? (
+                          <span className="text-emerald-700 font-medium flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                            <span>Valid WhatsApp: {phoneValidation.formatted}</span>
+                          </span>
+                        ) : (
+                          <span className="text-rose-600 font-medium flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[14px]">error</span>
+                            <span>{phoneValidation.error}</span>
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-slate-400">
+                          {countryCode === "+91" ? "Enter 10-digit mobile number (e.g. 9876543210)" : "Enter mobile number with country code"}
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div>
@@ -710,6 +948,22 @@ export default function ProfileInvestorPage() {
                       className="w-full px-3.5 py-2.5 bg-white border border-[#DCECF2] rounded-xl text-xs sm:text-sm text-[#0A192A] focus:outline-none focus:border-[#00A6E8] disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
                     />
                   </div>
+                </div>
+
+                {/* Explicit WhatsApp Public Contact Consent Checkbox */}
+                <div id="field-whatsapp-consent-container" className="p-3.5 bg-[#F4FAFD] border border-[#DCECF2] rounded-xl flex items-start gap-3">
+                  <input
+                    id="field-whatsapp-consent"
+                    type="checkbox"
+                    checked={whatsAppConsent}
+                    onChange={(e) => setWhatsAppConsent(e.target.checked)}
+                    disabled={isPendingReview || saving}
+                    className="mt-0.5 w-4 h-4 text-[#00A6E8] border-[#DCECF2] rounded focus:ring-[#00A6E8] cursor-pointer"
+                  />
+                  <label htmlFor="field-whatsapp-consent" className="text-xs text-[#0A192A] leading-relaxed cursor-pointer select-none">
+                    <span className="font-bold text-[#00658F]">Public WhatsApp Contact Consent (Required):</span>{" "}
+                    I explicitly authorize Wenture India to display this WhatsApp number on my approved investor profile so verified entrepreneurs can click <strong>Chat on WhatsApp</strong> to connect directly with me regarding business opportunities.
+                  </label>
                 </div>
               </div>
 
@@ -1052,6 +1306,8 @@ export default function ProfileInvestorPage() {
                         <span>
                           {existingProfile?.status === "published"
                             ? "Save & Update Profile"
+                            : existingProfile?.status === "changes_requested"
+                            ? "Save & Resubmit Profile for Review"
                             : existingProfile?.status === "rejected"
                             ? "Update & Resubmit for Review"
                             : "Save & Submit for Admin Review"}

@@ -23,10 +23,34 @@ import {
   formatEnquiryEmailSubject,
   formatEnquiryEmailBody,
 } from "@/components/enquiries/investor-contact-modal";
+import { VerificationTrustSection } from "@/components/profile/verification-trust-section";
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, profile, role, isEntrepreneur, isInvestor, isAdmin, loading, isAuthenticated, signOut, refreshProfile } = useAuth();
+  const {
+    user,
+    profile,
+    role,
+    roles,
+    activeRole,
+    switchActiveRole,
+    addRole,
+    isEntrepreneur,
+    isInvestor,
+    isAdmin,
+    loading,
+    isAuthenticated,
+    signOut,
+    refreshProfile,
+  } = useAuth();
+
+  // Multi-Role Management State
+  const [showAddRoleModal, setShowAddRoleModal] = useState<"investor" | "entrepreneur" | null>(null);
+  const [newRoleCompany, setNewRoleCompany] = useState("");
+  const [newRoleSector, setNewRoleSector] = useState("");
+  const [addingRole, setAddingRole] = useState(false);
+  const [switchingRole, setSwitchingRole] = useState(false);
+  const [roleActionMsg, setRoleActionMsg] = useState<string | null>(null);
 
   // Edit Mode State
   const [isEditing, setIsEditing] = useState(false);
@@ -189,6 +213,40 @@ export default function ProfilePage() {
     }
   };
 
+  const handleSwitchRole = async (targetRole: "investor" | "entrepreneur") => {
+    setSwitchingRole(true);
+    setErrorMsg(null);
+    const res = await switchActiveRole(targetRole);
+    setSwitchingRole(false);
+    if (res.error) {
+      setErrorMsg(res.error);
+    } else {
+      setSuccessMsg(`Switched active view to ${targetRole.toUpperCase()}.`);
+      setTimeout(() => setSuccessMsg(null), 3000);
+    }
+  };
+
+  const handleAddRoleConfirm = async () => {
+    if (!showAddRoleModal) return;
+    setAddingRole(true);
+    setRoleActionMsg(null);
+    const targetRole = showAddRoleModal;
+    const res = await addRole(targetRole, {
+      companyName: newRoleCompany.trim() || undefined,
+      sector: newRoleSector.trim() || undefined,
+    });
+    setAddingRole(false);
+    if (res.error) {
+      setRoleActionMsg(res.error);
+    } else {
+      setSuccessMsg(`Successfully added ${targetRole.toUpperCase()} role to your account.`);
+      setShowAddRoleModal(null);
+      setNewRoleCompany("");
+      setNewRoleSector("");
+      setTimeout(() => setSuccessMsg(null), 4000);
+    }
+  };
+
   const handleChangePassword = async () => {
     if (!user || !user.email) return;
     setPasswordMsg(null);
@@ -337,6 +395,278 @@ export default function ProfilePage() {
               </span>
               <span>{passwordMsg}</span>
             </motion.div>
+          )}
+
+          {/* ============================================================ */}
+          {/* 1.5. ACCOUNT ROLES & CAPABILITIES (MULTI-ROLE ARCHITECTURE) */}
+          {/* ============================================================ */}
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.45, delay: 0.05 }}
+            className="bg-white border border-[#DCECF2] rounded-2xl shadow-[0_8px_30px_rgba(10,25,42,0.04)] p-6 sm:p-7 mb-8"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-[#DCECF2]">
+              <div>
+                <span className="text-[11px] font-bold text-[#00A6E8] uppercase tracking-wider block mb-0.5">
+                  Account Roles &amp; Access
+                </span>
+                <h2 className="text-xl font-bold text-[#0A192A] flex items-center gap-2">
+                  <span>Role Management</span>
+                  {roles && roles.length > 1 && (
+                    <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      Multi-Role Enabled
+                    </span>
+                  )}
+                </h2>
+                <p className="text-xs sm:text-sm text-[#5F7180] mt-1">
+                  Access both Entrepreneur venture creation and Investor deal-discovery with your single Wenture India account.
+                </p>
+              </div>
+
+              {/* Quick Switch Action for Multi-Role accounts */}
+              {roles && roles.includes("investor") && roles.includes("entrepreneur") && (
+                <div className="flex items-center gap-2 self-start sm:self-auto">
+                  {activeRole === "entrepreneur" ? (
+                    <button
+                      type="button"
+                      disabled={switchingRole}
+                      onClick={() => handleSwitchRole("investor")}
+                      className="px-4 py-2 rounded-xl bg-[#EBF6FC] hover:bg-[#DCECF2] text-[#00658F] font-bold text-xs flex items-center gap-2 border border-[#DCECF2] transition-colors shadow-xs"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">explore</span>
+                      <span>{switchingRole ? "Switching..." : "Switch to Investor View"}</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={switchingRole}
+                      onClick={() => handleSwitchRole("entrepreneur")}
+                      className="px-4 py-2 rounded-xl bg-[#EBF6FC] hover:bg-[#DCECF2] text-[#00658F] font-bold text-xs flex items-center gap-2 border border-[#DCECF2] transition-colors shadow-xs"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">rocket_launch</span>
+                      <span>{switchingRole ? "Switching..." : "Switch to Entrepreneur View"}</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-5">
+              {/* Entrepreneur Role Card */}
+              <div
+                className={`p-4 rounded-xl border transition-all ${
+                  activeRole === "entrepreneur"
+                    ? "bg-[#F4FAFD] border-[#00A6E8]/40 shadow-xs ring-1 ring-[#00A6E8]/20"
+                    : roles?.includes("entrepreneur")
+                    ? "bg-white border-[#DCECF2]"
+                    : "bg-slate-50/70 border-dashed border-slate-200"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                        activeRole === "entrepreneur"
+                          ? "bg-[#00A6E8] text-white"
+                          : roles?.includes("entrepreneur")
+                          ? "bg-[#EBF6FC] text-[#00A6E8]"
+                          : "bg-slate-200 text-slate-500"
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[20px]">rocket_launch</span>
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-[#0A192A] flex items-center gap-2">
+                        <span>Entrepreneur</span>
+                        {activeRole === "entrepreneur" && (
+                          <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-[#00658F] text-white">
+                            Active
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-[#5F7180] mt-0.5">
+                        List ventures, raise capital, and receive investor enquiries.
+                      </p>
+                    </div>
+                  </div>
+
+                  {roles?.includes("entrepreneur") ? (
+                    activeRole !== "entrepreneur" ? (
+                      <button
+                        type="button"
+                        disabled={switchingRole}
+                        onClick={() => handleSwitchRole("entrepreneur")}
+                        className="text-xs font-bold text-[#00658F] hover:underline shrink-0"
+                      >
+                        Activate
+                      </button>
+                    ) : (
+                      <span className="material-symbols-outlined text-[18px] text-emerald-600 shrink-0">
+                        check_circle
+                      </span>
+                    )
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowAddRoleModal("entrepreneur")}
+                      className="px-3 py-1.5 rounded-lg bg-[#00A6E8] hover:bg-[#0093CE] text-white font-bold text-xs shrink-0 transition-colors"
+                    >
+                      + Add Role
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Investor Role Card */}
+              <div
+                className={`p-4 rounded-xl border transition-all ${
+                  activeRole === "investor"
+                    ? "bg-[#F4FAFD] border-[#00A6E8]/40 shadow-xs ring-1 ring-[#00A6E8]/20"
+                    : roles?.includes("investor")
+                    ? "bg-white border-[#DCECF2]"
+                    : "bg-slate-50/70 border-dashed border-slate-200"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                        activeRole === "investor"
+                          ? "bg-[#00A6E8] text-white"
+                          : roles?.includes("investor")
+                          ? "bg-[#EBF6FC] text-[#00A6E8]"
+                          : "bg-slate-200 text-slate-500"
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[20px]">explore</span>
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-[#0A192A] flex items-center gap-2">
+                        <span>Investor</span>
+                        {activeRole === "investor" && (
+                          <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md bg-[#00658F] text-white">
+                            Active
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-[#5F7180] mt-0.5">
+                        Discover deals, express investment interest, and build a public investor profile.
+                      </p>
+                    </div>
+                  </div>
+
+                  {roles?.includes("investor") ? (
+                    activeRole !== "investor" ? (
+                      <button
+                        type="button"
+                        disabled={switchingRole}
+                        onClick={() => handleSwitchRole("investor")}
+                        className="text-xs font-bold text-[#00658F] hover:underline shrink-0"
+                      >
+                        Activate
+                      </button>
+                    ) : (
+                      <span className="material-symbols-outlined text-[18px] text-emerald-600 shrink-0">
+                        check_circle
+                      </span>
+                    )
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setShowAddRoleModal("investor")}
+                      className="px-3 py-1.5 rounded-lg bg-[#00A6E8] hover:bg-[#0093CE] text-white font-bold text-xs shrink-0 transition-colors"
+                    >
+                      + Add Role
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Modal for Adding a Role */}
+          {showAddRoleModal && (
+            <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+              <div className="bg-white border border-[#DCECF2] rounded-2xl p-6 sm:p-7 max-w-md w-full shadow-2xl space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-[#DCECF2]">
+                  <div className="flex items-center gap-2.5">
+                    <span className="material-symbols-outlined text-[24px] text-[#00A6E8]">
+                      {showAddRoleModal === "investor" ? "explore" : "rocket_launch"}
+                    </span>
+                    <h3 className="font-bold text-base text-[#0A192A]">
+                      Add {showAddRoleModal === "investor" ? "Investor" : "Entrepreneur"} Role
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddRoleModal(null)}
+                    className="text-slate-400 hover:text-slate-600 p-1"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">close</span>
+                  </button>
+                </div>
+
+                <p className="text-xs text-[#5F7180] leading-relaxed">
+                  {showAddRoleModal === "investor"
+                    ? "Adding the Investor role allows you to browse curated venture listings, connect directly with founders, and publish an investor profile."
+                    : "Adding the Entrepreneur role allows you to list your businesses, upload pitch decks, and receive capital enquiries from verified investors."}
+                </p>
+
+                {roleActionMsg && (
+                  <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs">
+                    {roleActionMsg}
+                  </div>
+                )}
+
+                {showAddRoleModal === "entrepreneur" && (
+                  <div className="space-y-3 pt-1">
+                    <div>
+                      <label className="block text-xs font-semibold text-[#0A192A] mb-1">
+                        Company / Venture Name (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={newRoleCompany}
+                        onChange={(e) => setNewRoleCompany(e.target.value)}
+                        placeholder="e.g. Acme Ventures"
+                        className="w-full px-3 py-2 bg-white border border-[#DCECF2] rounded-lg text-xs text-[#0A192A] focus:outline-none focus:border-[#00A6E8]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-[#0A192A] mb-1">
+                        Industry Sector (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={newRoleSector}
+                        onChange={(e) => setNewRoleSector(e.target.value)}
+                        placeholder="e.g. FinTech, Healthcare, SaaS"
+                        className="w-full px-3 py-2 bg-white border border-[#DCECF2] rounded-lg text-xs text-[#0A192A] focus:outline-none focus:border-[#00A6E8]"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div className="pt-3 flex items-center justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddRoleModal(null)}
+                    className="px-4 py-2 rounded-xl border border-[#DCECF2] text-xs font-bold text-[#5F7180] hover:text-[#0A192A] hover:bg-slate-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={addingRole}
+                    onClick={handleAddRoleConfirm}
+                    className="px-4 py-2 rounded-xl bg-[#00A6E8] hover:bg-[#0093CE] text-white text-xs font-bold transition-colors disabled:opacity-50"
+                  >
+                    {addingRole ? "Adding..." : `Confirm & Add ${showAddRoleModal === "investor" ? "Investor" : "Entrepreneur"}`}
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
 
           {/* ============================================================ */}
@@ -1162,6 +1492,11 @@ export default function ProfilePage() {
               </motion.div>
             </div>
           )}
+
+          {/* ============================================================ */}
+          {/* VERIFICATION & TRUST LAYER */}
+          {/* ============================================================ */}
+          <VerificationTrustSection />
 
           {/* ============================================================ */}
           {/* 4. ACCOUNT SECURITY & ACTIONS */}

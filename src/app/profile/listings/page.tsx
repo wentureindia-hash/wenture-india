@@ -8,10 +8,12 @@ import { Footer } from "@/components/layout/footer";
 import { useAuth } from "@/lib/firebase/auth-context";
 import {
   createListing,
+  updateListing,
   getUserListings,
   deleteListing,
   uploadListingImage,
   uploadPitchDeck,
+  getListingPitchDeck,
   BusinessListing,
   ListingType,
 } from "@/lib/firebase/listings";
@@ -31,6 +33,7 @@ import {
   formatEnquiryEmailBody,
 } from "@/components/enquiries/investor-contact-modal";
 import { FileUploadField, UploadStatus } from "@/components/ui/file-upload-field";
+import { RoleSwitchModal } from "@/components/profile/role-switch-modal";
 
 const LISTING_TYPES: ListingType[] = [
   "Investment",
@@ -111,6 +114,8 @@ export default function EntrepreneurListingsPage() {
     user,
     profile,
     role,
+    roles,
+    activeRole,
     isEntrepreneur,
     isAdmin,
     loading,
@@ -120,6 +125,7 @@ export default function EntrepreneurListingsPage() {
   const [listings, setListings] = useState<BusinessListing[]>([]);
   const [loadingListings, setLoadingListings] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingListing, setEditingListing] = useState<BusinessListing | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
@@ -143,16 +149,21 @@ export default function EntrepreneurListingsPage() {
   const [businessModel, setBusinessModel] = useState(BUSINESS_MODELS[0]);
   const [description, setDescription] = useState("");
 
-  // Section 2: Investment Information
+  // Section 2: Investment & Financial Information
   const [investmentRange, setInvestmentRange] = useState(INVESTMENT_RANGES[2]);
   const [investmentPurpose, setInvestmentPurpose] = useState(INVESTMENT_PURPOSES[0]);
   const [expectedUseOfFunds, setExpectedUseOfFunds] = useState("");
   const [preferredInvestorType, setPreferredInvestorType] = useState(PREFERRED_INVESTOR_TYPES[0]);
+  const [expectedValuation, setExpectedValuation] = useState("");
+  const [equityOffered, setEquityOffered] = useState("");
+  const [turnover, setTurnover] = useState("");
+  const [profit, setProfit] = useState("");
 
   // Section 3: Founder / Owner Information
   const [founderName, setFounderName] = useState("");
   const [founderBackground, setFounderBackground] = useState("");
   const [founderExperience, setFounderExperience] = useState("");
+  const [website, setWebsite] = useState("");
 
   // Section 4: Business Presentation & Pitch Deck
   const [shortDescription, setShortDescription] = useState("");
@@ -215,17 +226,26 @@ export default function EntrepreneurListingsPage() {
     return "Recent";
   };
 
-  // User is restricted if their role is not entrepreneur and not admin
+  // User is restricted if their role is not entrepreneur (or assigned entrepreneur) and not admin
+  const hasEntrepreneurAccess = isEntrepreneur || role === "entrepreneur" || (roles && roles.includes("entrepreneur")) || isAdmin;
   const isRestricted =
     !loading &&
     isAuthenticated &&
-    (!isEntrepreneur && role !== "entrepreneur" && !isAdmin);
+    !hasEntrepreneurAccess;
+
+  // Multi-role check: user has entrepreneur role, but their current activeRole is "investor"
+  const isMultiRoleNeedingSwitch =
+    !loading &&
+    isAuthenticated &&
+    !isAdmin &&
+    hasEntrepreneurAccess &&
+    activeRole === "investor";
 
   useEffect(() => {
     if (!loading) {
       if (!isAuthenticated) {
         router.push("/login?redirect=/profile/listings");
-      } else if (!isRestricted && (isEntrepreneur || role === "entrepreneur" || isAdmin)) {
+      } else if (!isRestricted && !isMultiRoleNeedingSwitch && hasEntrepreneurAccess) {
         loadUserListings();
         loadEnquiries();
         if (user?.email) {
@@ -243,6 +263,8 @@ export default function EntrepreneurListingsPage() {
     loading,
     isAuthenticated,
     isRestricted,
+    isMultiRoleNeedingSwitch,
+    hasEntrepreneurAccess,
     isEntrepreneur,
     role,
     isAdmin,
@@ -292,6 +314,119 @@ export default function EntrepreneurListingsPage() {
     }, 50);
   };
 
+  const handleOpenCreateModal = () => {
+    setEditingListing(null);
+    setTitle("");
+    setBusinessType(BUSINESS_TYPES[0]);
+    setListingType("Investment");
+    setCategory("Direct Business Opportunity");
+    setSector(SECTORS[0]?.name || "Technology & AI");
+    setLocation("");
+    setBusinessStage(BUSINESS_STAGES[2]);
+    setYearsInOperation(YEARS_IN_OPERATION[1]);
+    setBusinessModel(BUSINESS_MODELS[0]);
+    setDescription("");
+    setInvestmentRange(INVESTMENT_RANGES[2]);
+    setInvestmentPurpose(INVESTMENT_PURPOSES[0]);
+    setExpectedUseOfFunds("");
+    setPreferredInvestorType(PREFERRED_INVESTOR_TYPES[0]);
+    setExpectedValuation("");
+    setEquityOffered("");
+    setTurnover("");
+    setProfit("");
+    setWebsite("");
+    setFounderName(profile?.fullName || profile?.name || "");
+    setFounderBackground("");
+    setFounderExperience("");
+    setShortDescription("");
+    setImageUrl("");
+    setImageFile(null);
+    setImageUploadStatus("idle");
+    setImageError(null);
+    setPitchDeckFile(null);
+    setPitchDeckUrl("");
+    setPitchDeckFileName("");
+    setPitchDeckStoragePath(null);
+    setPitchDeckUploadStatus("idle");
+    setPitchDeckError(null);
+    setContactPhone(profile?.phone || "");
+    setContactEmail(user?.email || "");
+    setFormError(null);
+    setFormSuccess(null);
+    setShowCreateModal(true);
+  };
+
+  const handleStartEdit = (listing: BusinessListing) => {
+    setEditingListing(listing);
+    // If published listing has pending review data, load from staged data so entrepreneur sees their pending draft
+    const rawStaged = listing.hasPendingEdits && listing.pendingReviewData
+      ? (listing.pendingReviewData as Record<string, unknown>)
+      : null;
+
+    setTitle((rawStaged?.title as string) || listing.title || "");
+    setBusinessType((rawStaged?.businessType as string) || listing.businessType || BUSINESS_TYPES[0]);
+    setListingType((rawStaged?.listingType as ListingType) || listing.listingType || "Investment");
+    setCategory((rawStaged?.category as string) || listing.category || "Direct Business Opportunity");
+    setSector((rawStaged?.sector as string) || listing.sector || SECTORS[0]?.name || "Technology & AI");
+    setLocation((rawStaged?.location as string) || listing.location || "");
+    setBusinessStage((rawStaged?.businessStage as string) || listing.businessStage || BUSINESS_STAGES[2]);
+    setYearsInOperation((rawStaged?.yearsInOperation as string) || listing.yearsInOperation || YEARS_IN_OPERATION[1]);
+    setBusinessModel((rawStaged?.businessModel as string) || listing.businessModel || BUSINESS_MODELS[0]);
+    setDescription((rawStaged?.description as string) || listing.description || "");
+    setInvestmentRange((rawStaged?.investmentRange as string) || listing.investmentRange || INVESTMENT_RANGES[2]);
+    setInvestmentPurpose((rawStaged?.investmentPurpose as string) || listing.investmentPurpose || INVESTMENT_PURPOSES[0]);
+    setExpectedUseOfFunds((rawStaged?.expectedUseOfFunds as string) || listing.expectedUseOfFunds || "");
+    setPreferredInvestorType((rawStaged?.preferredInvestorType as string) || listing.preferredInvestorType || PREFERRED_INVESTOR_TYPES[0]);
+    setExpectedValuation((rawStaged?.expectedValuation as string) || listing.expectedValuation || "");
+    setEquityOffered((rawStaged?.equityOffered as string) || listing.equityOffered || "");
+    setTurnover((rawStaged?.turnover as string) || listing.turnover || "");
+    setProfit((rawStaged?.profit as string) || listing.profit || "");
+    setWebsite((rawStaged?.website as string) || listing.website || "");
+    setFounderName((rawStaged?.founderName as string) || listing.founderName || "");
+    setFounderBackground((rawStaged?.founderBackground as string) || listing.founderBackground || "");
+    setFounderExperience((rawStaged?.founderExperience as string) || listing.founderExperience || "");
+    setShortDescription((rawStaged?.shortDescription as string) || listing.shortDescription || "");
+
+    const existingImages = Array.isArray(rawStaged?.images) ? (rawStaged?.images as string[]) : listing.images;
+    setImageUrl(existingImages && existingImages.length > 0 ? existingImages[0] : "");
+    setImageFile(null);
+    setImageUploadStatus(existingImages && existingImages.length > 0 ? "success" : "idle");
+    setImageError(null);
+
+    setPitchDeckFile(null);
+    const existingDeckUrl = (rawStaged?.pitchDeckUrl as string) || listing.pitchDeckUrl || "";
+    const existingDeckFileName = (rawStaged?.pitchDeckFileName as string) || listing.pitchDeckFileName || "";
+    const existingStoragePath = (rawStaged?.pitchDeckStoragePath as string) || listing.pitchDeckStoragePath || null;
+    setPitchDeckUrl(existingDeckUrl);
+    setPitchDeckFileName(existingDeckFileName);
+    setPitchDeckStoragePath(existingStoragePath);
+    const hasExistingDeck = Boolean(
+      existingDeckUrl ||
+      existingStoragePath ||
+      existingDeckFileName ||
+      listing.hasPitchDeck
+    );
+    setPitchDeckUploadStatus(hasExistingDeck ? "success" : "idle");
+    setPitchDeckError(null);
+
+    // Asynchronously retrieve secure preview signed URL if pitch deck is stored in Supabase private storage
+    if (!existingDeckUrl && (existingStoragePath || listing.hasPitchDeck) && listing.id) {
+      getListingPitchDeck(listing.id)
+        .then((deckRes) => {
+          if (deckRes.url) {
+            setPitchDeckUrl(deckRes.url);
+          }
+        })
+        .catch(() => {});
+    }
+
+    setContactPhone((rawStaged?.contactPhone as string) || listing.contactPhone || "");
+    setContactEmail((rawStaged?.contactEmail as string) || listing.contactEmail || user?.email || "");
+    setFormError(null);
+    setFormSuccess(null);
+    setShowCreateModal(true);
+  };
+
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
@@ -332,15 +467,16 @@ export default function EntrepreneurListingsPage() {
     setSubmitting(true);
 
     const tempId = `listing_${Date.now()}`;
+    const folderId = editingListing?.id || tempId;
     let finalPitchDeckUrl = pitchDeckUrl;
     let finalPitchDeckFileName = pitchDeckFileName;
     let finalPitchDeckStoragePath = pitchDeckStoragePath;
 
     // 1. Handle pitch deck upload if a new file is pending upload
-    if (pitchDeckFile && !pitchDeckUrl) {
+    if (pitchDeckFile) {
       setPitchDeckUploadStatus("uploading");
       setPitchDeckError(null);
-      const pitchRes = await uploadPitchDeck(pitchDeckFile, tempId);
+      const pitchRes = await uploadPitchDeck(pitchDeckFile, folderId);
 
       if (pitchRes.error) {
         setPitchDeckUploadStatus("error");
@@ -390,6 +526,69 @@ export default function EntrepreneurListingsPage() {
       finalImages.push("/images/opp-default.jpg");
     }
 
+    // BRANCH: EDIT EXISTING LISTING
+    if (editingListing?.id) {
+      const updateRes = await updateListing(editingListing.id, {
+        title: title.trim(),
+        businessType,
+        listingType,
+        category: category.trim(),
+        sector: sector.trim(),
+        location: location.trim(),
+        businessStage,
+        yearsInOperation,
+        businessModel,
+        shortDescription: shortDescription.trim(),
+        description: description.trim(),
+        investmentRange,
+        investmentPurpose,
+        expectedUseOfFunds: expectedUseOfFunds.trim() || undefined,
+        preferredInvestorType,
+        expectedValuation: expectedValuation.trim() || undefined,
+        equityOffered: equityOffered.trim() || undefined,
+        turnover: turnover.trim() || undefined,
+        profit: profit.trim() || undefined,
+        website: website.trim() || undefined,
+        founderName: founderName.trim() || undefined,
+        founderBackground: founderBackground.trim() || undefined,
+        founderExperience: founderExperience.trim() || undefined,
+        pitchDeckUrl: finalPitchDeckUrl ? finalPitchDeckUrl.trim() : null,
+        pitchDeckFileName: finalPitchDeckFileName ? finalPitchDeckFileName.trim() : null,
+        pitchDeckStoragePath: finalPitchDeckStoragePath ? finalPitchDeckStoragePath.trim() : null,
+        contactPhone: contactPhone.trim(),
+        contactEmail: contactEmail.trim(),
+        images: finalImages,
+      });
+
+      setSubmitting(false);
+
+      if (updateRes.error) {
+        setFormError(updateRes.error);
+        return;
+      }
+
+      if (editingListing.status === "published") {
+        setFormSuccess(
+          "Revisions submitted successfully! Your changes are awaiting administrator review. The current approved listing remains live."
+        );
+      } else if (editingListing.status === "rejected") {
+        setFormSuccess(
+          "Listing revised and resubmitted successfully! It is now Pending Administrator Review."
+        );
+      } else {
+        setFormSuccess("Listing updated successfully!");
+      }
+
+      await loadUserListings();
+      setTimeout(() => {
+        setShowCreateModal(false);
+        setFormSuccess(null);
+        setEditingListing(null);
+      }, 2000);
+      return;
+    }
+
+    // BRANCH: CREATE NEW LISTING
     const res = await createListing({
       title: title.trim(),
       businessType,
@@ -406,6 +605,11 @@ export default function EntrepreneurListingsPage() {
       investmentPurpose,
       expectedUseOfFunds: expectedUseOfFunds.trim() || undefined,
       preferredInvestorType,
+      expectedValuation: expectedValuation.trim() || undefined,
+      equityOffered: equityOffered.trim() || undefined,
+      turnover: turnover.trim() || undefined,
+      profit: profit.trim() || undefined,
+      website: website.trim() || undefined,
       founderName: founderName.trim() || undefined,
       founderBackground: founderBackground.trim() || undefined,
       founderExperience: founderExperience.trim() || undefined,
@@ -445,6 +649,7 @@ export default function EntrepreneurListingsPage() {
       setTimeout(() => {
         setShowCreateModal(false);
         setFormSuccess(null);
+        setEditingListing(null);
       }, 1800);
     }
   };
@@ -493,6 +698,28 @@ export default function EntrepreneurListingsPage() {
       alert("Failed to delete: " + res.error);
     }
   };
+
+  // If user has both roles and is currently in Investor mode, require active role switch
+  if (isMultiRoleNeedingSwitch) {
+    return (
+      <div className="flex flex-col min-h-screen bg-[#F6FAFF]">
+        <Navbar />
+        <main className="flex-grow flex items-center justify-center py-24 px-5">
+          <RoleSwitchModal
+            isOpen={true}
+            targetRole="entrepreneur"
+            targetPath="/profile/listings"
+            onClose={() => router.push("/profile")}
+          />
+          <div className="text-center">
+            <div className="w-8 h-8 border-3 border-[#00A6E8] border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+            <p className="text-xs font-semibold text-[#5F7180]">Switching to Entrepreneur mode...</p>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   // If user is signed in as an Investor (or non-entrepreneur), block access and prompt to sign up/in as Entrepreneur
   if (isRestricted) {
@@ -596,12 +823,8 @@ export default function EntrepreneurListingsPage() {
 
             <button
               type="button"
-              onClick={() => {
-                setFormError(null);
-                setFormSuccess(null);
-                setShowCreateModal(true);
-              }}
-              className="px-5 py-3 rounded-xl bg-[#00A6E8] hover:bg-[#0093CE] text-white font-bold text-xs uppercase tracking-wider transition-all shadow-md shadow-[#00A6E8]/20 flex items-center gap-2 self-start sm:self-auto"
+              onClick={handleOpenCreateModal}
+              className="px-5 py-3 rounded-xl bg-[#00A6E8] hover:bg-[#0093CE] text-white font-bold text-xs uppercase tracking-wider transition-all shadow-md shadow-[#00A6E8]/20 flex items-center gap-2 self-start sm:self-auto cursor-pointer"
             >
               <span className="material-symbols-outlined text-[18px]">add_circle</span>
               <span>Create New Listing</span>
@@ -901,8 +1124,8 @@ export default function EntrepreneurListingsPage() {
                   </p>
                   <button
                     type="button"
-                    onClick={() => setShowCreateModal(true)}
-                    className="px-6 py-3 rounded-xl bg-[#00A6E8] hover:bg-[#0093CE] text-white font-bold text-xs uppercase tracking-wider transition-all shadow-md shadow-[#00A6E8]/20 inline-flex items-center gap-2"
+                    onClick={handleOpenCreateModal}
+                    className="px-6 py-3 rounded-xl bg-[#00A6E8] hover:bg-[#0093CE] text-white font-bold text-xs uppercase tracking-wider transition-all shadow-md shadow-[#00A6E8]/20 inline-flex items-center gap-2 cursor-pointer"
                   >
                     <span className="material-symbols-outlined text-[18px]">add</span>
                     <span>Submit Your First Opportunity</span>
@@ -934,6 +1157,18 @@ export default function EntrepreneurListingsPage() {
                               <span className={`px-2.5 py-0.5 rounded-md text-[11px] font-extrabold uppercase tracking-wider border ${badgeColor}`}>
                                 {statusLabel}
                               </span>
+                              {item.isVerified && (
+                                <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-blue-50 text-blue-700 border border-blue-200 flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[12px] text-blue-600">verified</span>
+                                  <span>Verified Listing</span>
+                                </span>
+                              )}
+                              {item.hasPendingEdits && (
+                                <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[13px] text-amber-600">hourglass_top</span>
+                                  <span>Revisions Awaiting Review</span>
+                                </span>
+                              )}
                               <span className="px-2.5 py-0.5 rounded-md text-[11px] font-bold bg-[#F4FAFD] text-[#00658F] border border-[#DCECF2]">
                                 {item.listingType}
                               </span>
@@ -946,21 +1181,36 @@ export default function EntrepreneurListingsPage() {
                             </h2>
                           </div>
 
-                          <div className="flex items-center gap-3">
+                          <div className="flex flex-wrap items-center gap-2.5">
+                            {/* Edit / Revise Button */}
+                            <button
+                              type="button"
+                              onClick={() => handleStartEdit(item)}
+                              className="px-4 py-2 rounded-xl bg-[#00A6E8] hover:bg-[#0093CE] text-white text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">
+                                {item.status === "rejected" ? "edit_note" : "edit"}
+                              </span>
+                              <span>
+                                {item.status === "rejected" ? "Revise & Resubmit" : "Edit Listing"}
+                              </span>
+                            </button>
+
                             {item.status === "published" && item.id && (
                               <Link
                                 href={`/opportunities/${item.id}`}
                                 target="_blank"
-                                className="px-4 py-2 rounded-xl bg-[#F4FAFD] hover:bg-[#EBF6FC] text-[#00658F] border border-[#DCECF2] text-xs font-bold transition-colors flex items-center gap-1.5"
+                                className="px-3.5 py-2 rounded-xl bg-[#F4FAFD] hover:bg-[#EBF6FC] text-[#00658F] border border-[#DCECF2] text-xs font-bold transition-colors flex items-center gap-1.5"
                               >
                                 <span>View Public Page</span>
                                 <span className="material-symbols-outlined text-[16px]">open_in_new</span>
                               </Link>
                             )}
+
                             <button
                               type="button"
                               onClick={() => handleDeleteListing(item.id)}
-                              className="px-3.5 py-2 rounded-xl text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 text-xs font-bold transition-colors flex items-center gap-1"
+                              className="px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
                             >
                               <span className="material-symbols-outlined text-[16px]">delete</span>
                               <span>Remove</span>
@@ -987,16 +1237,41 @@ export default function EntrepreneurListingsPage() {
                                 <span className="material-symbols-outlined text-[16px] text-[#00A6E8]">phone</span>
                                 {item.contactPhone}
                               </span>
+                              {item.turnover && (
+                                <span className="flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-[16px] text-[#00A6E8]">trending_up</span>
+                                  Turnover: {item.turnover}
+                                </span>
+                              )}
                             </div>
                           </div>
 
-                          {/* Rejection notice if applicable */}
+                          {/* Rejection / Revision feedback notice */}
                           {item.status === "rejected" && item.rejectionReason && (
-                            <div className="md:col-span-12 p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-start gap-2 mt-2">
-                              <span className="material-symbols-outlined text-[18px] text-rose-600 shrink-0">info</span>
-                              <div>
-                                <strong>Review Feedback:</strong> {item.rejectionReason}
+                            <div className="md:col-span-12 p-4 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mt-2 shadow-2xs">
+                              <div className="flex items-start gap-2.5">
+                                <span className="material-symbols-outlined text-[20px] text-rose-600 shrink-0 mt-0.5">info</span>
+                                <div>
+                                  <strong className="block font-bold text-rose-950 mb-0.5">Administrator Review Feedback:</strong>
+                                  <p className="text-rose-800 leading-relaxed">{item.rejectionReason}</p>
+                                </div>
                               </div>
+                              <button
+                                type="button"
+                                onClick={() => handleStartEdit(item)}
+                                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs shrink-0 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                              >
+                                <span className="material-symbols-outlined text-[15px]">edit_note</span>
+                                <span>Revise Listing Now</span>
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Staged revisions banner */}
+                          {item.hasPendingEdits && (
+                            <div className="md:col-span-12 p-3.5 bg-amber-50/90 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-center gap-2 mt-2">
+                              <span className="material-symbols-outlined text-[18px] text-amber-600 shrink-0">pending_actions</span>
+                              <span>Your updates have been submitted and are under administrator review. The current live version remains active in the public catalog until approved.</span>
                             </div>
                           )}
                         </div>
@@ -1011,7 +1286,7 @@ export default function EntrepreneurListingsPage() {
       </main>
 
       {/* ============================================================ */}
-      {/* CREATE NEW LISTING MODAL */}
+      {/* CREATE / EDIT LISTING MODAL */}
       {/* ============================================================ */}
       <AnimatePresence>
         {showCreateModal && (
@@ -1025,13 +1300,31 @@ export default function EntrepreneurListingsPage() {
               <div className="flex items-start justify-between pb-4 border-b border-[#DCECF2] mb-5">
                 <div>
                   <span className="text-[10px] sm:text-[11px] font-bold text-[#00A6E8] uppercase tracking-wider block mb-0.5">
-                    Entrepreneur Onboarding &amp; Listing
+                    {editingListing
+                      ? editingListing.status === "published"
+                        ? "Live Listing Revision"
+                        : editingListing.status === "rejected"
+                        ? "Address Review Feedback"
+                        : "Edit Pending Opportunity"
+                      : "Entrepreneur Onboarding & Listing"}
                   </span>
                   <h3 className="text-lg sm:text-2xl font-bold text-[#0A192A] font-heading">
-                    List Your Business Opportunity
+                    {editingListing
+                      ? editingListing.status === "published"
+                        ? "Update Published Opportunity"
+                        : editingListing.status === "rejected"
+                        ? "Revise & Resubmit Opportunity"
+                        : "Edit Business Opportunity"
+                      : "List Your Business Opportunity"}
                   </h3>
                   <p className="text-xs text-[#5F7180] mt-1">
-                    Complete your venture profile to connect with active investors and strategic commercial partners.
+                    {editingListing
+                      ? editingListing.status === "published"
+                        ? "Submit updates to your live opportunity. Your live listing remains published until changes are approved."
+                        : editingListing.status === "rejected"
+                        ? "Address the review feedback below and resubmit for administrator approval."
+                        : "Update your pending venture submission before administrator moderation."
+                      : "Complete your venture profile to connect with active investors and strategic commercial partners."}
                   </p>
                 </div>
                 <button
@@ -1042,6 +1335,30 @@ export default function EntrepreneurListingsPage() {
                   <span className="material-symbols-outlined text-[24px]">close</span>
                 </button>
               </div>
+
+              {/* Revision feedback alert inside modal if rejected */}
+              {editingListing?.status === "rejected" && editingListing.rejectionReason && (
+                <div className="mb-6 p-4 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-900 flex items-start gap-2.5">
+                  <span className="material-symbols-outlined text-[20px] text-rose-600 shrink-0 mt-0.5">feedback</span>
+                  <div>
+                    <strong className="block font-bold text-rose-950 mb-0.5">Administrator Revision Feedback to Address:</strong>
+                    <p className="text-rose-800 leading-relaxed">{editingListing.rejectionReason}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Published live status notice if editing published */}
+              {editingListing?.status === "published" && (
+                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-2xl text-xs text-blue-900 flex items-start gap-2.5">
+                  <span className="material-symbols-outlined text-[20px] text-blue-600 shrink-0 mt-0.5">info</span>
+                  <div>
+                    <strong className="block font-bold text-blue-950 mb-0.5">Safe Revision Workflow:</strong>
+                    <p className="text-blue-800 leading-relaxed">
+                      Your existing approved opportunity remains live in the catalog. When you submit edits, they will be reviewed by an administrator before updating the public listing.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* Completeness Indicator */}
               <div className="mb-6 p-3.5 sm:p-4 bg-[#F4FAFD] border border-[#DCECF2] rounded-2xl">
@@ -1385,6 +1702,62 @@ export default function EntrepreneurListingsPage() {
                       className="w-full px-3.5 py-2.5 bg-white border border-[#DCECF2] rounded-xl text-xs sm:text-sm text-[#0A192A] focus:outline-none focus:border-[#00A6E8]"
                     />
                   </div>
+
+                  {/* Valuation & Deal Terms (Optional) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-[#DCECF2]/60">
+                    <div>
+                      <label className="block text-xs font-bold text-[#0A192A] mb-1">
+                        Expected Valuation (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={expectedValuation}
+                        onChange={(e) => setExpectedValuation(e.target.value)}
+                        placeholder="e.g. ₹5 Cr Pre-Money"
+                        className="w-full px-3.5 py-2.5 bg-white border border-[#DCECF2] rounded-xl text-xs sm:text-sm text-[#0A192A] focus:outline-none focus:border-[#00A6E8]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-[#0A192A] mb-1">
+                        Equity Offered / Terms (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={equityOffered}
+                        onChange={(e) => setEquityOffered(e.target.value)}
+                        placeholder="e.g. 10% Equity or Debt/Royalty"
+                        className="w-full px-3.5 py-2.5 bg-white border border-[#DCECF2] rounded-xl text-xs sm:text-sm text-[#0A192A] focus:outline-none focus:border-[#00A6E8]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Financial Metrics (Optional) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-[#0A192A] mb-1">
+                        Annual Turnover / Revenue (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={turnover}
+                        onChange={(e) => setTurnover(e.target.value)}
+                        placeholder="e.g. ₹1.2 Cr FY24"
+                        className="w-full px-3.5 py-2.5 bg-white border border-[#DCECF2] rounded-xl text-xs sm:text-sm text-[#0A192A] focus:outline-none focus:border-[#00A6E8]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-[#0A192A] mb-1">
+                        Net Profit / EBITDA (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        value={profit}
+                        onChange={(e) => setProfit(e.target.value)}
+                        placeholder="e.g. ₹22L Net Profit / Profitable"
+                        className="w-full px-3.5 py-2.5 bg-white border border-[#DCECF2] rounded-xl text-xs sm:text-sm text-[#0A192A] focus:outline-none focus:border-[#00A6E8]"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* ======================================================= */}
@@ -1405,20 +1778,37 @@ export default function EntrepreneurListingsPage() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-[#0A192A] mb-1">
-                      Founder / Owner Name
-                    </label>
-                    <p className="text-[11px] text-[#5F7180] mb-1.5 leading-snug">
-                      Lead promoter or co-founder name.
-                    </p>
-                    <input
-                      type="text"
-                      value={founderName}
-                      onChange={(e) => setFounderName(e.target.value)}
-                      placeholder="e.g. Ananya Sharma &amp; Vikram Patil"
-                      className="w-full px-3.5 py-2.5 bg-white border border-[#DCECF2] rounded-xl text-xs sm:text-sm text-[#0A192A] focus:outline-none focus:border-[#00A6E8]"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-[#0A192A] mb-1">
+                        Founder / Owner Name
+                      </label>
+                      <p className="text-[11px] text-[#5F7180] mb-1.5 leading-snug">
+                        Lead promoter or co-founder name.
+                      </p>
+                      <input
+                        type="text"
+                        value={founderName}
+                        onChange={(e) => setFounderName(e.target.value)}
+                        placeholder="e.g. Ananya Sharma & Vikram Patil"
+                        className="w-full px-3.5 py-2.5 bg-white border border-[#DCECF2] rounded-xl text-xs sm:text-sm text-[#0A192A] focus:outline-none focus:border-[#00A6E8]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-[#0A192A] mb-1">
+                        Company Website / URL (Optional)
+                      </label>
+                      <p className="text-[11px] text-[#5F7180] mb-1.5 leading-snug">
+                        Official business website or online store.
+                      </p>
+                      <input
+                        type="url"
+                        value={website}
+                        onChange={(e) => setWebsite(e.target.value)}
+                        placeholder="https://yourcompany.com"
+                        className="w-full px-3.5 py-2.5 bg-white border border-[#DCECF2] rounded-xl text-xs sm:text-sm text-[#0A192A] focus:outline-none focus:border-[#00A6E8]"
+                      />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1645,7 +2035,7 @@ export default function EntrepreneurListingsPage() {
                   <button
                     type="submit"
                     disabled={submitting || pitchDeckUploadStatus === "uploading" || imageUploadStatus === "uploading"}
-                    className="px-6 py-2.5 rounded-xl bg-[#00A6E8] hover:bg-[#0093CE] text-white text-xs font-bold transition-all shadow-md shadow-[#00A6E8]/20 disabled:opacity-50 flex items-center gap-2"
+                    className="px-6 py-2.5 rounded-xl bg-[#00A6E8] hover:bg-[#0093CE] text-white text-xs font-bold transition-all shadow-md shadow-[#00A6E8]/20 disabled:opacity-50 flex items-center gap-2 cursor-pointer"
                   >
                     {submitting || pitchDeckUploadStatus === "uploading" || imageUploadStatus === "uploading" ? (
                       <>
@@ -1655,13 +2045,25 @@ export default function EntrepreneurListingsPage() {
                             ? "Uploading Pitch Deck..."
                             : imageUploadStatus === "uploading"
                             ? "Uploading Cover Image..."
+                            : editingListing
+                            ? "Saving Changes..."
                             : "Submitting for Review..."}
                         </span>
                       </>
                     ) : (
                       <>
-                        <span className="material-symbols-outlined text-[16px]">send</span>
-                        <span>Submit Listing for Review</span>
+                        <span className="material-symbols-outlined text-[16px]">
+                          {editingListing ? "save" : "send"}
+                        </span>
+                        <span>
+                          {editingListing
+                            ? editingListing.status === "published"
+                              ? "Submit Revisions for Review"
+                              : editingListing.status === "rejected"
+                              ? "Resubmit for Review"
+                              : "Save Changes"
+                            : "Submit for Admin Review"}
+                        </span>
                       </>
                     )}
                   </button>

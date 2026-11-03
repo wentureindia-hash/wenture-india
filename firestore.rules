@@ -5,12 +5,71 @@ service cloud.firestore {
     // Helper to check if caller is an admin (independent of normal platform role)
     function isAdmin() {
       return request.auth != null && (
+        // 1. Explicitly provisioned Admin UID records in the dedicated admins collection
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')) ||
-        (request.auth.token.email in ['wentureindia@gmail.com', 'info@wentureindia.com', 'payalnkapse1720@gmail.com'])
+        // 2. Strict Whitelisted Admin Email Accounts with enforced verified email
+        (
+          request.auth.token.email_verified == true &&
+          request.auth.token.email in [
+            'payalnkapse1720@gmail.com',
+            'wentureindia@gmail.com',
+            'info@wentureindia.com'
+          ]
+        )
       );
+    }
+
+    // Helper to verify parent listing ownership for subcollections
+    function isParentListingOwner(listingId) {
+      return request.auth != null && (
+        (('ownerId' in get(/databases/$(database)/documents/listings/$(listingId)).data) &&
+         get(/databases/$(database)/documents/listings/$(listingId)).data.ownerId == request.auth.uid) ||
+        (('userId' in get(/databases/$(database)/documents/listings/$(listingId)).data) && 
+         get(/databases/$(database)/documents/listings/$(listingId)).data.userId == request.auth.uid)
+      );
+    }
+
+    // Helper to validate multi-role data structures on users collection:
+    // 1. roles must be a non-empty list containing only 'investor' or 'entrepreneur'
+    // 2. activeRole must be in ['investor', 'entrepreneur'] and must belong to roles
+    // 3. role must always match activeRole
+    function isValidRoleAssignment(data) {
+      return (!('roles' in data) || (
+        data.roles is list &&
+        data.roles.size() > 0 &&
+        data.roles.hasOnly(['investor', 'entrepreneur'])
+      )) &&
+      (!('activeRole' in data) || (
+        data.activeRole in ['investor', 'entrepreneur'] &&
+        (!('roles' in data) || data.activeRole in data.roles)
+      )) &&
+      (!('role' in data) || (
+        data.role in ['investor', 'entrepreneur'] &&
+        (!('activeRole' in data) || data.role == data.activeRole)
+      ));
+    }
+
+    // Helper to check if caller is an active Entrepreneur
+    function isEntrepreneurCaller() {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        (
+          // 1. Multi-role enabled: activeRole is 'entrepreneur' and 'entrepreneur' is in roles
+          (
+            ('activeRole' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) &&
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.activeRole == 'entrepreneur' &&
+            (
+              !('roles' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) ||
+              'entrepreneur' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.roles
+            )
+          ) ||
+          // 2. Legacy fallback: role == 'entrepreneur' if activeRole is absent
+          (
+            !('activeRole' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) &&
+            ('role' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) &&
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'entrepreneur'
+          )
+        );
     }
 
     // --- 1. User Profiles Collection ---
@@ -18,20 +77,26 @@ service cloud.firestore {
       // User can read their own profile; Admin can read all
       allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
       
-      // User can create their profile on signup, but cannot self-assign isAdmin: true
+      // User can create their profile on signup, but cannot self-assign administrative or verification flags
+      // Roles must be valid non-empty list of ['investor', 'entrepreneur'], activeRole in roles, role == activeRole
       allow create: if request.auth != null && (
         isAdmin() || (
           request.auth.uid == userId &&
-          (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false)
+          (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == false) &&
+          (!('isVerified' in request.resource.data) || request.resource.data.isVerified == false) &&
+          (!('verificationStatus' in request.resource.data) || request.resource.data.verificationStatus in ['unsubmitted', 'pending']) &&
+          isValidRoleAssignment(request.resource.data)
         )
       );
 
-      // User can update their own profile fields, but CANNOT self-elevate to isAdmin: true
+      // User can update their own profile fields, switch activeRole, or add 'investor'/'entrepreneur' to roles.
+      // CANNOT self-elevate to admin, alter isAdmin, or modify verification badges.
+      // Roles must be non-empty, activeRole must belong to roles, and role must match activeRole.
       allow update: if request.auth != null && (
         isAdmin() || (
           request.auth.uid == userId &&
-          (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == resource.data.isAdmin) &&
-          (!('role' in request.resource.data) || request.resource.data.role == resource.data.role || request.resource.data.role in ['investor', 'entrepreneur'])
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['isAdmin', 'isVerified', 'verificationStatus', 'verifiedAt', 'rejectionReason'])) &&
+          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['roles', 'activeRole', 'role']) || isValidRoleAssignment(request.resource.data))
         )
       );
 
@@ -40,35 +105,118 @@ service cloud.firestore {
     }
 
     // --- 2. Admins Collection ---
+    // Read: Authenticated user can verify their own admin document; Admin can inspect all
+    // Write: Strictly locked against all client writes. Admin provisioning must occur
+    // exclusively via trusted server-side Firebase Admin SDK or Firebase Console.
     match /admins/{userId} {
       allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
-      // Admin privilege can only be granted/written by an existing Admin
-      allow write: if isAdmin();
+      allow write: if false;
     }
 
     // --- 3. Listings Collection ---
     match /listings/{listingId} {
-      // Public can read published listings; Owner and Admin can read all
+      // Public can read published listings; Owner (ownerId or legacy userId) and Admin can read all
       allow read: if resource.data.status == 'published' 
-                  || (request.auth != null && (resource.data.ownerId == request.auth.uid || isAdmin()));
+                  || (request.auth != null && (
+                    (('ownerId' in resource.data) && resource.data.ownerId == request.auth.uid) || 
+                    (('userId' in resource.data) && resource.data.userId == request.auth.uid) ||
+                    isAdmin()
+                  ));
       
       // Authenticated users can create listings, strictly forced to "pending"
+      // Must set ownerId to self. If userId is provided, must also match self.
+      // Cannot self-assign verification flags, admin notes, or payment status.
       allow create: if request.auth != null 
                     && request.resource.data.ownerId == request.auth.uid 
-                    && request.resource.data.status == 'pending';
+                    && (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid)
+                    && request.resource.data.status == 'pending'
+                    && (!('approvalStatus' in request.resource.data) || request.resource.data.approvalStatus == 'pending')
+                    && (!('isVerified' in request.resource.data) || request.resource.data.isVerified == false)
+                    && (!('isPaidListing' in request.resource.data) || request.resource.data.isPaidListing == false)
+                    && (!('isFeatured' in request.resource.data) || request.resource.data.isFeatured == false)
+                    && (!('adminNotes' in request.resource.data));
       
-      // Owner can update their own listing if it's not changing status to "published"
-      // Admin can update any listing (e.g. approve/reject)
+      // Owner can update their own listing (editable fields, resubmissions, revision requests).
+      // Cannot self-publish, self-approve, reassign ownership (ownerId / userId), or modify admin-controlled fields.
+      // Admin can update any listing without restriction.
       allow update: if isAdmin() || (
         request.auth != null 
-        && request.auth.uid == resource.data.ownerId
-        && request.resource.data.ownerId == resource.data.ownerId
-        && request.resource.data.status != 'published'
+        // 1. Ownership check: Must match existing ownerId or legacy userId
+        && (
+          (('ownerId' in resource.data) && resource.data.ownerId == request.auth.uid) ||
+          (('userId' in resource.data) && resource.data.userId == request.auth.uid)
+        )
+        // 2. Prevent ownerId reassignment
+        && ('ownerId' in resource.data ? request.resource.data.ownerId == resource.data.ownerId : (!('ownerId' in request.resource.data) || request.resource.data.ownerId == request.auth.uid))
+        // 3. Prevent userId reassignment (preserve if exists, or only allow self UID if adding)
+        && ('userId' in resource.data ? request.resource.data.userId == resource.data.userId : (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid))
+        // 4. Status invariants: cannot self-publish; can only remain same or resubmit to pending
+        && (!('status' in request.resource.data) || request.resource.data.status == resource.data.status || request.resource.data.status == 'pending')
+        && !(resource.data.status != 'published' && request.resource.data.status == 'published')
+        // 5. Approval invariants: cannot self-approve; can only remain same or resubmit to pending
+        && (!('approvalStatus' in request.resource.data) || request.resource.data.approvalStatus == resource.data.approvalStatus || request.resource.data.approvalStatus == 'pending')
+        && !(resource.data.approvalStatus != 'approved' && request.resource.data.approvalStatus == 'approved')
+        // 6. Admin and verification fields strictly immutable by owner
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'isVerified', 
+          'verifiedAt', 
+          'verifiedBy',
+          'isPaidListing', 
+          'paymentStatus', 
+          'paidAt',
+          'paymentAmount',
+          'featuredUntil', 
+          'isFeatured',
+          'adminNotes',
+          'approvedAt',
+          'approvedBy',
+          'publishedAt'
+        ]))
       );
+
+      // Pitch Deck and sensitive documents subcollection
+      match /restricted/{docId} {
+        // Authenticated parent listing owner (via ownerId or legacy userId) or admin can read pitch decks.
+        // Publication of parent listing does NOT grant pitch deck access to arbitrary investors.
+        // A stale or mismatched child document ownerId/userId cannot independently grant access.
+        allow read: if request.auth != null && (
+          isAdmin() ||
+          isParentListingOwner(listingId)
+        );
+
+        // Separate Create: Must own parent listing (or be admin). Consistent ownerId & userId.
+        allow create: if request.auth != null && (
+          isAdmin() || (
+            isParentListingOwner(listingId) &&
+            request.resource.data.ownerId == request.auth.uid &&
+            (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid)
+          )
+        );
+
+        // Separate Update: Must own parent listing & existing document. Cannot reassign ownerId or userId.
+        allow update: if isAdmin() || (
+          request.auth != null &&
+          isParentListingOwner(listingId) &&
+          (
+            (('ownerId' in resource.data) && resource.data.ownerId == request.auth.uid) ||
+            (('userId' in resource.data) && resource.data.userId == request.auth.uid)
+          ) &&
+          ('ownerId' in resource.data ? request.resource.data.ownerId == resource.data.ownerId : (!('ownerId' in request.resource.data) || request.resource.data.ownerId == request.auth.uid)) &&
+          ('userId' in resource.data ? request.resource.data.userId == resource.data.userId : (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid))
+        );
+
+        // Separate Delete: Only the parent listing owner or an admin can delete restricted documents
+        allow delete: if isAdmin() || (
+          request.auth != null && isParentListingOwner(listingId)
+        );
+      }
 
       // Owner or Admin can delete
       allow delete: if isAdmin() || (
-        request.auth != null && request.auth.uid == resource.data.ownerId
+        request.auth != null && (
+          (('ownerId' in resource.data) && resource.data.ownerId == request.auth.uid) ||
+          (('userId' in resource.data) && resource.data.userId == request.auth.uid)
+        )
       );
     }
     
@@ -126,6 +274,26 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
     }
+    match /opportunities/{docId} {
+      // Only published opportunities are publicly readable; owners and admins can read all
+      allow read: if resource.data.status == 'published'
+                  || (request.auth != null && (
+                    (('ownerId' in resource.data) && resource.data.ownerId == request.auth.uid) || 
+                    (('userId' in resource.data) && resource.data.userId == request.auth.uid) ||
+                    isAdmin()
+                  ));
+      allow write: if isAdmin();
+    }
+    match /business_listings/{docId} {
+      // Only published listings are publicly readable; owners and admins can read all
+      allow read: if resource.data.status == 'published'
+                  || (request.auth != null && (
+                    (('ownerId' in resource.data) && resource.data.ownerId == request.auth.uid) || 
+                    (('userId' in resource.data) && resource.data.userId == request.auth.uid) ||
+                    isAdmin()
+                  ));
+      allow write: if isAdmin();
+    }
     match /featured/{docId} {
       allow read: if true;
       allow write: if isAdmin();
@@ -146,13 +314,16 @@ service cloud.firestore {
                     && request.auth.uid == profileId
                     && request.resource.data.status == 'pending';
 
-      // Investor can update their own profile ONLY if not currently 'pending', and CANNOT self-publish
+      // Investor can update their own profile ONLY if not currently 'pending', and CANNOT self-publish or modify approval/payment
       // Admin can update any profile (e.g. approve/publish, reject, edit)
       allow update: if isAdmin() || (
         request.auth != null
         && request.auth.uid == profileId
         && resource.data.status != 'pending'
         && request.resource.data.status != 'published'
+        && (!('approvalStatus' in request.resource.data) || request.resource.data.approvalStatus == resource.data.approvalStatus)
+        && (!('paymentStatus' in request.resource.data) || request.resource.data.paymentStatus == resource.data.paymentStatus)
+        && (!('isVerified' in request.resource.data) || request.resource.data.isVerified == resource.data.isVerified)
       );
 
       // Investor or Admin can delete
@@ -161,18 +332,51 @@ service cloud.firestore {
 
     // --- 8. Investor Enquiries (Express Interest) ---
     match /investor_enquiries/{enquiryId} {
-      // Any authenticated or guest user can submit an expression of interest with valid data
-      allow create: if request.resource.data.name is string
+      // Only authenticated users operating in Entrepreneur Mode can submit an expression of interest to an investor
+      allow create: if request.auth != null
+                    && isEntrepreneurCaller()
+                    && request.resource.data.name is string
                     && request.resource.data.email is string
-                    && request.resource.data.investorId is string;
+                    && request.resource.data.investorId is string
+                    && request.resource.data.investorId != request.auth.uid
+                    && (!('senderId' in request.resource.data) || request.resource.data.senderId == request.auth.uid)
+                    && (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid);
 
-      // Only the recipient investor or Admin can read inquiries
+      // Only the recipient investor, the sender entrepreneur, or Admin can read inquiries
       allow read: if request.auth != null && (
-        isAdmin() || resource.data.investorId == request.auth.uid
+        isAdmin() ||
+        resource.data.investorId == request.auth.uid ||
+        (('senderId' in resource.data) && resource.data.senderId == request.auth.uid) ||
+        (('userId' in resource.data) && resource.data.userId == request.auth.uid)
       );
 
       // Only Admin can update/delete enquiries
       allow update, delete: if isAdmin();
+    }
+
+    // --- 9. Verification & Trust Documents ---
+    match /verifications/{userId} {
+      // User can read their own verification record; Admin can read all
+      allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+
+      // Authenticated user can create/submit their verification document with pending status
+      allow create: if request.auth != null
+                    && request.auth.uid == userId
+                    && request.resource.data.status == 'pending'
+                    && !('reviewedAt' in request.resource.data)
+                    && !('reviewedBy' in request.resource.data);
+
+      // User can resubmit if rejected or update docs, strictly constrained to pending and cannot touch review audit fields
+      // Admin has full update capability (approve, reject, review notes)
+      allow update: if isAdmin() || (
+        request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.status == 'pending'
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['reviewedAt', 'reviewedBy']))
+      );
+
+      // Only Admin can delete verification records
+      allow delete: if isAdmin();
     }
   }
 }

@@ -7,6 +7,7 @@ import { Opportunity, formatWhatsAppNumber } from "@/lib/constants/opportunities
 import { OpportunityEnquiryModal } from "@/components/forms/opportunity-enquiry-modal";
 import { useAuth } from "@/lib/firebase/auth-context";
 import { COMPANY } from "@/lib/constants/company";
+import { getListingPitchDeck } from "@/lib/firebase/listings";
 
 interface OpportunityDetailViewProps {
   opportunity: Opportunity;
@@ -21,6 +22,29 @@ export function OpportunityDetailView({
   const { user, isAuthenticated } = useAuth();
   const [modalOpen, setModalOpen] = useState(false);
   const [imgSrc, setImgSrc] = useState(opp.imageUrl || DEFAULT_IMAGE);
+  const [openingDeck, setOpeningDeck] = useState(false);
+  const [deckErrorMessage, setDeckErrorMessage] = useState<string | null>(null);
+
+  const handleOpenPitchDeck = async () => {
+    if (opp.pitchDeckUrl) {
+      window.open(opp.pitchDeckUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+    setOpeningDeck(true);
+    setDeckErrorMessage(null);
+    try {
+      const res = await getListingPitchDeck(opp.id);
+      if (res.url) {
+        window.open(res.url, "_blank", "noopener,noreferrer");
+      } else {
+        setDeckErrorMessage(res.error || "Pitch deck is currently unavailable.");
+      }
+    } catch {
+      setDeckErrorMessage("Failed to open pitch deck. Please try again.");
+    } finally {
+      setOpeningDeck(false);
+    }
+  };
 
   const isOwner = Boolean(
     isAuthenticated &&
@@ -182,8 +206,8 @@ export function OpportunityDetailView({
               </div>
             )}
 
-            {/* Pitch Deck Presentation (if uploaded) */}
-            {opp.pitchDeckUrl && (
+            {/* Pitch Deck Presentation (if uploaded or flagged) */}
+            {(opp.hasPitchDeck || opp.pitchDeckUrl) && (
               <div className="pt-4 border-t border-[#DCECF2]">
                 <h2 className="text-xl font-bold text-[#0A192A] mb-3 font-heading flex items-center gap-2">
                   <span className="material-symbols-outlined text-rose-500">picture_as_pdf</span>
@@ -201,23 +225,28 @@ export function OpportunityDetailView({
                       <p className="text-[11px] text-[#5F7180]">
                         Official company overview presentation
                       </p>
+                      {deckErrorMessage && (
+                        <p className="text-[11px] text-rose-600 mt-1 font-medium">{deckErrorMessage}</p>
+                      )}
                     </div>
                   </div>
                   {isAuthenticated ? (
-                    <a
-                      href={opp.pitchDeckUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 shrink-0 shadow-xs"
+                    <button
+                      type="button"
+                      onClick={handleOpenPitchDeck}
+                      disabled={openingDeck}
+                      className="px-4 py-2 bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 shrink-0 shadow-xs cursor-pointer"
                     >
-                      <span className="material-symbols-outlined text-[16px]">download</span>
-                      <span>View Pitch Deck</span>
-                    </a>
+                      <span className="material-symbols-outlined text-[16px]">
+                        {openingDeck ? "sync" : "download"}
+                      </span>
+                      <span>{openingDeck ? "Loading..." : "View Pitch Deck"}</span>
+                    </button>
                   ) : (
                     <button
                       type="button"
                       onClick={() => setModalOpen(true)}
-                      className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 shrink-0"
+                      className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
                     >
                       <span className="material-symbols-outlined text-[16px]">lock</span>
                       <span>Sign in to View</span>
