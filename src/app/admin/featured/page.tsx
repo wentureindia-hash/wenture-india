@@ -120,56 +120,70 @@ export default function AdminFeaturedContentPage() {
       </div>
 
       {/* Items Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-        {currentItems.map((item) => (
-          <div
-            key={item.id}
-            className="bg-white border border-[#DCECF2] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow"
-          >
-            <div>
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <span className="px-2.5 py-0.5 rounded text-[10px] font-extrabold uppercase bg-[#EBF6FC] text-[#00658F] border border-[#DCECF2]">
-                  {item.type}
-                </span>
-                {item.tag && (
-                  <span className="text-[10px] font-extrabold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
-                    {item.tag}
+      {currentItems.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+          {currentItems.map((item) => (
+            <div
+              key={item.id}
+              className="bg-white border border-[#DCECF2] rounded-2xl p-4 sm:p-5 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow"
+            >
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <span className="px-2.5 py-0.5 rounded text-[10px] font-extrabold uppercase bg-[#EBF6FC] text-[#00658F] border border-[#DCECF2]">
+                    {item.type}
                   </span>
-                )}
+                  {item.tag && (
+                    <span className="text-[10px] font-extrabold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                      {item.tag}
+                    </span>
+                  )}
+                </div>
+
+                <h3 className="text-base font-bold text-[#0A192A] mb-1 font-heading">{item.name}</h3>
+                <p className="text-xs text-[#5F7180] line-clamp-2 mb-4 leading-relaxed">{item.shortDescription}</p>
+
+                <div className="text-[11px] space-y-1 text-[#5F7180] pt-3 border-t border-slate-100 mb-4">
+                  <div className="flex justify-between">
+                    <span>Sector:</span>
+                    <strong className="text-[#0A192A]">{item.sector}</strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Location:</span>
+                    <strong className="text-[#0A192A]">{item.location}</strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Investment:</span>
+                    <strong className="text-[#0A192A]">{item.investmentRange}</strong>
+                  </div>
+                </div>
               </div>
 
-              <h3 className="text-base font-bold text-[#0A192A] mb-1 font-heading">{item.name}</h3>
-              <p className="text-xs text-[#5F7180] line-clamp-2 mb-4 leading-relaxed">{item.shortDescription}</p>
-
-              <div className="text-[11px] space-y-1 text-[#5F7180] pt-3 border-t border-slate-100 mb-4">
-                <div className="flex justify-between">
-                  <span>Sector:</span>
-                  <strong className="text-[#0A192A]">{item.sector}</strong>
-                </div>
-                <div className="flex justify-between">
-                  <span>Location:</span>
-                  <strong className="text-[#0A192A]">{item.location}</strong>
-                </div>
-                <div className="flex justify-between">
-                  <span>Investment:</span>
-                  <strong className="text-[#0A192A]">{item.investmentRange}</strong>
-                </div>
+              <div className="flex items-center justify-end pt-3 border-t border-[#DCECF2]">
+                <button
+                  type="button"
+                  onClick={() => handleRemoveItem(item.id)}
+                  className="text-xs font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-[16px]">delete</span>
+                  <span>Remove</span>
+                </button>
               </div>
             </div>
-
-            <div className="flex items-center justify-end pt-3 border-t border-[#DCECF2]">
-              <button
-                type="button"
-                onClick={() => handleRemoveItem(item.id)}
-                className="text-xs font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1"
-              >
-                <span className="material-symbols-outlined text-[16px]">delete</span>
-                <span>Remove</span>
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-16 bg-white border border-[#DCECF2] rounded-2xl p-8">
+          <span className="material-symbols-outlined text-[36px] text-slate-300 mb-2 block">
+            featured_play_list
+          </span>
+          <h3 className="text-base font-bold text-[#0A192A] mb-1">
+            No featured items in this section
+          </h3>
+          <p className="text-xs text-[#5F7180] mb-4">
+            Click &quot;Add Featured Item&quot; above to feature an approved business or venture in this tab.
+          </p>
+        </div>
+      )}
 
       {/* Add Item Modal */}
       {showAddModal && (

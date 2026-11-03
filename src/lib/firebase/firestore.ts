@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDoc,
   addDoc,
   getDocs,
   updateDoc,
@@ -101,6 +102,47 @@ export async function submitOpportunityEnquiry(data: OpportunityEnquiry) {
       ownerEmail.trim().toLowerCase() === senderEmail.trim().toLowerCase()
     ) {
       return { id: null, error: "You cannot submit an enquiry on your own opportunity." };
+    }
+
+    // Block enquiries if target opportunity is deleted
+    if (data.opportunityId) {
+      try {
+        const oppDoc = await getDoc(doc(db, "listings", data.opportunityId));
+        if (oppDoc.exists()) {
+          const oppData = oppDoc.data();
+          if (
+            oppData.status === "deleted" ||
+            oppData.isDeleted === true ||
+            oppData.accountStatus === "deletion_pending"
+          ) {
+            return { id: null, error: "This business opportunity is no longer available." };
+          }
+        }
+      } catch {
+        // Fallback ignore
+      }
+    }
+
+    // Block enquiries if sender account is deletion_pending
+    if (senderId) {
+      try {
+        const senderDoc = await getDoc(doc(db, "users", senderId));
+        if (senderDoc.exists()) {
+          const sData = senderDoc.data();
+          if (
+            sData.accountStatus === "deletion_pending" ||
+            sData.isDeleted === true ||
+            sData.status === "deleted"
+          ) {
+            return {
+              id: null,
+              error: "Your account is scheduled for deletion. New enquiries cannot be submitted.",
+            };
+          }
+        }
+      } catch {
+        // Fallback ignore
+      }
     }
 
     const docRef = await addDoc(collection(db, "opportunity_enquiries"), {
@@ -212,6 +254,25 @@ export async function deleteOpportunityEnquiry(
 }
 
 /**
+ * Delete a general contact inquiry (admin only)
+ */
+export async function deleteContactInquiry(
+  inquiryId: string
+): Promise<{ success: boolean; error: string | null }> {
+  try {
+    if (!inquiryId) {
+      return { success: false, error: "Inquiry ID is required" };
+    }
+    await deleteDoc(doc(db, "contact_inquiries", inquiryId));
+    return { success: true, error: null };
+  } catch (err: unknown) {
+    const error = err as { message?: string };
+    console.error("[deleteContactInquiry] error:", err);
+    return { success: false, error: error.message || "Failed to delete contact inquiry" };
+  }
+}
+
+/**
  * Get enquiries received for a specific Entrepreneur's opportunities
  * Strictly queries by opportunityOwnerId == ownerId, with backward compatibility for legacy field names
  */
@@ -249,9 +310,13 @@ export async function getEnquiriesForEntrepreneur(
       }
 
       querySnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data.status === "listing_deleted" || data.opportunityStatus === "deleted") {
+          return;
+        }
         enquiriesMap.set(docSnap.id, {
           id: docSnap.id,
-          ...(docSnap.data() as Omit<OpportunityEnquiry, "id">),
+          ...(data as Omit<OpportunityEnquiry, "id">),
         });
       });
     } catch (err) {
@@ -266,11 +331,13 @@ export async function getEnquiriesForEntrepreneur(
       );
       const legacySnap = await getDocs(legacyQuery);
       legacySnap.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data.status === "listing_deleted" || data.opportunityStatus === "deleted") return;
         if (!enquiriesMap.has(docSnap.id)) {
           enquiriesMap.set(docSnap.id, {
             id: docSnap.id,
             opportunityOwnerId: ownerId,
-            ...(docSnap.data() as Omit<OpportunityEnquiry, "id">),
+            ...(data as Omit<OpportunityEnquiry, "id">),
           });
         }
       });
@@ -288,11 +355,13 @@ export async function getEnquiriesForEntrepreneur(
         );
         const emailSnap = await getDocs(emailQ);
         emailSnap.forEach((docSnap) => {
+          const data = docSnap.data();
+          if (data.status === "listing_deleted" || data.opportunityStatus === "deleted") return;
           if (!enquiriesMap.has(docSnap.id)) {
             enquiriesMap.set(docSnap.id, {
               id: docSnap.id,
               opportunityOwnerId: ownerId,
-              ...(docSnap.data() as Omit<OpportunityEnquiry, "id">),
+              ...(data as Omit<OpportunityEnquiry, "id">),
             });
           }
         });
@@ -305,11 +374,13 @@ export async function getEnquiriesForEntrepreneur(
         );
         const ownerEmailSnap = await getDocs(ownerEmailQ);
         ownerEmailSnap.forEach((docSnap) => {
+          const data = docSnap.data();
+          if (data.status === "listing_deleted" || data.opportunityStatus === "deleted") return;
           if (!enquiriesMap.has(docSnap.id)) {
             enquiriesMap.set(docSnap.id, {
               id: docSnap.id,
               opportunityOwnerId: ownerId,
-              ...(docSnap.data() as Omit<OpportunityEnquiry, "id">),
+              ...(data as Omit<OpportunityEnquiry, "id">),
             });
           }
         });
@@ -454,9 +525,13 @@ export async function getEnquiriesSentByUser(userId: string): Promise<{
       }
 
       querySnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data.status === "listing_deleted" || data.opportunityStatus === "deleted") {
+          return;
+        }
         enquiriesMap.set(docSnap.id, {
           id: docSnap.id,
-          ...(docSnap.data() as Omit<OpportunityEnquiry, "id">),
+          ...(data as Omit<OpportunityEnquiry, "id">),
         });
       });
     } catch (err) {
@@ -471,10 +546,12 @@ export async function getEnquiriesSentByUser(userId: string): Promise<{
       );
       const userUidSnap = await getDocs(userUidQuery);
       userUidSnap.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data.status === "listing_deleted" || data.opportunityStatus === "deleted") return;
         if (!enquiriesMap.has(docSnap.id)) {
           enquiriesMap.set(docSnap.id, {
             id: docSnap.id,
-            ...(docSnap.data() as Omit<OpportunityEnquiry, "id">),
+            ...(data as Omit<OpportunityEnquiry, "id">),
           });
         }
       });
@@ -489,10 +566,12 @@ export async function getEnquiriesSentByUser(userId: string): Promise<{
       );
       const userIdSnap = await getDocs(userIdQuery);
       userIdSnap.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data.status === "listing_deleted" || data.opportunityStatus === "deleted") return;
         if (!enquiriesMap.has(docSnap.id)) {
           enquiriesMap.set(docSnap.id, {
             id: docSnap.id,
-            ...(docSnap.data() as Omit<OpportunityEnquiry, "id">),
+            ...(data as Omit<OpportunityEnquiry, "id">),
           });
         }
       });

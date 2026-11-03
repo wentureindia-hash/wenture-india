@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { SECTORS } from "@/lib/constants/sectors";
-import { OPPORTUNITIES, Opportunity } from "@/lib/constants/opportunities";
+import { Opportunity } from "@/lib/constants/opportunities";
 import { getPublishedListings, convertListingToOpportunity } from "@/lib/firebase/listings";
 
 function matchesSector(oppSector: string, sectorName: string): boolean {
@@ -118,20 +118,8 @@ export function ExploreSectors() {
     load();
   }, []);
 
-  // Combine live published listings with demo opportunities
-  const allOpportunities = useMemo(() => {
-    const demoWithFlag = OPPORTUNITIES.map((opp) => ({ ...opp, isDemo: true }));
-    const liveSlugs = new Set(publishedOpps.map((l) => l.slug));
-    const liveIds = new Set(publishedOpps.map((l) => l.id));
-    const dedupedDemo = demoWithFlag.filter(
-      (d) =>
-        !liveSlugs.has(d.slug) &&
-        !liveSlugs.has(d.id) &&
-        !liveIds.has(d.id) &&
-        !liveIds.has(d.slug)
-    );
-    return [...publishedOpps, ...dedupedDemo];
-  }, [publishedOpps]);
+  // Use strictly live published listings from Firestore
+  const allOpportunities = publishedOpps;
 
   // Compute real count per sector and filter out sectors with 0 opportunities
   const activeSectorsWithCounts = useMemo(() => {

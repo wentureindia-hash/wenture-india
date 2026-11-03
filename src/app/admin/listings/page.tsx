@@ -100,6 +100,9 @@ export default function AdminListingsPage() {
 
   const filteredListings = useMemo(() => {
     return listings.filter((item) => {
+      if (item.status === "deleted" || item.isDeleted) {
+        return false;
+      }
       if (statusFilter !== "all" && item.status !== statusFilter) {
         return false;
       }

@@ -14,7 +14,6 @@ import {
 } from "firebase/firestore";
 import { auth, db } from "./client";
 import { uploadInvestorAvatarFile } from "./storage";
-import { DEMO_INVESTORS } from "@/lib/constants/investors";
 
 export type InvestorType =
   | "Individual"
@@ -30,7 +29,8 @@ export type InvestorStatus =
   | "changes_requested"
   | "rejected"
   | "approved"
-  | "published";
+  | "published"
+  | "deleted";
 
 export interface InvestorReviewHistoryEntry {
   action:
@@ -83,6 +83,8 @@ export interface InvestorProfile {
   createdAt?: unknown;
   updatedAt?: unknown;
   publishedAt?: unknown;
+  isDeleted?: boolean;
+  accountStatus?: string;
   isDemo?: boolean;
 }
 
@@ -137,7 +139,9 @@ export function normalizeInvestorProfile(
 ): InvestorProfile {
   const rawStatus = (raw.status || "pending").toString().toLowerCase().trim();
   let status: InvestorStatus = "pending";
-  if (rawStatus === "published" || rawStatus === "approved") {
+  if (rawStatus === "deleted" || raw.isDeleted === true || raw.accountStatus === "deletion_pending") {
+    status = "deleted";
+  } else if (rawStatus === "published" || rawStatus === "approved") {
     status = "published";
   } else if (rawStatus === "rejected" || rawStatus === "declined") {
     status = "rejected";
@@ -211,6 +215,8 @@ export function normalizeInvestorProfile(
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
     publishedAt: raw.publishedAt,
+    isDeleted: Boolean(raw.isDeleted) || status === "deleted",
+    accountStatus: (raw.accountStatus as string) || undefined,
   };
 }
 
@@ -259,6 +265,15 @@ export async function saveInvestorProfile(
     const existingData = !isNew ? existingSnap.data() : null;
     if (!isNew) {
       const existingStatus = (existingData?.status || "").toString().toLowerCase().trim();
+      if (
+        existingStatus === "deleted" ||
+        existingData?.isDeleted === true ||
+        existingData?.accountStatus === "deletion_pending"
+      ) {
+        return {
+          error: "This investor account has been deleted. Profile updates are disabled.",
+        };
+      }
       if (existingStatus === "pending") {
         return {
           error: "Your investor profile is currently under administrative review. Submissions are paused until review is complete.",
@@ -349,9 +364,7 @@ export async function saveInvestorProfile(
 }
 
 /**
- * Public: Fetch all published investor profiles (status == 'published')
- * Returns both published Firestore investor profiles and demo investors,
- * deduplicating to avoid any conflicts.
+ * Public: Fetch all genuine published investor profiles (status == 'published') directly from Firestore.
  */
 export async function getPublishedInvestors(): Promise<{
   investors: InvestorProfile[];
@@ -375,39 +388,30 @@ export async function getPublishedInvestors(): Promise<{
 
     const realInvestors: InvestorProfile[] = [];
     snap.forEach((d) => {
-      const normalized = normalizeInvestorProfile(d.id, d.data());
-      if (normalized.status === "published") {
+      const data = d.data();
+      if (data.isDeleted === true || data.status === "deleted" || data.accountStatus === "deletion_pending") {
+        return;
+      }
+      const normalized = normalizeInvestorProfile(d.id, data);
+      if (normalized.status === "published" && !normalized.isDeleted) {
         realInvestors.push({ ...normalized, isDemo: false });
       }
     });
 
-    // Merge with demo investors, deduplicating so real Firestore records take precedence
-    const realIds = new Set(realInvestors.map((i) => i.id));
-    const dedupedDemo = DEMO_INVESTORS.filter((d) => !realIds.has(d.id));
-    const combined = [...realInvestors, ...dedupedDemo];
-
-    return { investors: combined, error: null };
-  } catch {
-    // If Firestore is empty, unconfigured, or offline, gracefully return demo investors
-    return { investors: DEMO_INVESTORS, error: null };
+    return { investors: realInvestors, error: null };
+  } catch (err: unknown) {
+    const error = err as { message?: string };
+    return { investors: [], error: error.message || "Failed to load investors from directory." };
   }
 }
 
 /**
- * Public: Fetch single published investor profile by ID
- * Checks demo investors first, then Firestore published profiles.
+ * Public: Fetch single genuine published investor profile by ID from Firestore.
  */
 export async function getPublishedInvestorById(
   id: string
 ): Promise<{ investor: InvestorProfile | null; error: string | null }> {
   try {
-    // 1. Check demo investors
-    const demo = DEMO_INVESTORS.find((d) => d.id === id);
-    if (demo) {
-      return { investor: demo, error: null };
-    }
-
-    // 2. Fetch from Firestore
     const docRef = doc(db, "investorProfiles", id);
     const snap = await getDoc(docRef);
 
@@ -415,12 +419,17 @@ export async function getPublishedInvestorById(
       return { investor: null, error: "Investor profile not found." };
     }
 
-    const investor = normalizeInvestorProfile(snap.id, snap.data());
-    if (investor.status !== "published") {
-      // Allow owner or admin to preview unpublished
+    const rawData = snap.data();
+    if (rawData.isDeleted === true || rawData.status === "deleted" || rawData.accountStatus === "deletion_pending") {
+      return { investor: null, error: "Investor profile is no longer available." };
+    }
+
+    const investor = normalizeInvestorProfile(snap.id, rawData);
+    if (investor.status !== "published" || investor.isDeleted) {
+      // Allow owner or admin to preview unpublished (if not deleted)
       const user = auth.currentUser;
-      if (!user || user.uid !== investor.userId) {
-        return { investor: null, error: "This investor profile is currently undergoing verification." };
+      if (!user || user.uid !== investor.userId || investor.isDeleted) {
+        return { investor: null, error: "This investor profile is no longer available." };
       }
     }
 
@@ -480,6 +489,11 @@ export async function approveInvestor(
       return { error: "Investor profile not found." };
     }
     const currentData = snap.data();
+    if (currentData?.status === "deleted" || currentData?.isDeleted === true || currentData?.accountStatus === "deletion_pending") {
+      return {
+        error: "Cannot approve: This investor profile has been permanently deleted.",
+      };
+    }
     if (currentData?.status === "changes_requested") {
       return {
         error:
@@ -549,6 +563,11 @@ export async function rejectInvestor(
       return { error: "Investor profile not found." };
     }
     const currentData = snap.data();
+    if (currentData?.status === "deleted" || currentData?.isDeleted === true || currentData?.accountStatus === "deletion_pending") {
+      return {
+        error: "Cannot approve: This investor profile has been permanently deleted.",
+      };
+    }
     if (currentData?.status === "changes_requested") {
       return {
         error:
@@ -596,7 +615,15 @@ export async function requestChangesInvestor(
     const adminUser = auth.currentUser;
     const docRef = doc(db, "investorProfiles", uid);
     const snap = await getDoc(docRef);
+    if (!snap.exists()) {
+      return { error: "Investor profile not found." };
+    }
     const currentData = snap.data();
+    if (currentData?.status === "deleted" || currentData?.isDeleted === true || currentData?.accountStatus === "deletion_pending") {
+      return {
+        error: "Cannot request revisions: This investor profile has been permanently deleted.",
+      };
+    }
     const currentHistory: InvestorReviewHistoryEntry[] = Array.isArray(currentData?.reviewHistory)
       ? currentData.reviewHistory
       : [];
@@ -637,7 +664,15 @@ export async function addInvestorAdminNote(
     const adminUser = auth.currentUser;
     const docRef = doc(db, "investorProfiles", uid);
     const snap = await getDoc(docRef);
+    if (!snap.exists()) {
+      return { error: "Investor profile not found." };
+    }
     const currentData = snap.data();
+    if (currentData?.status === "deleted" || currentData?.isDeleted === true || currentData?.accountStatus === "deletion_pending") {
+      return {
+        error: "Cannot request revisions: This investor profile has been permanently deleted.",
+      };
+    }
     const currentHistory: InvestorReviewHistoryEntry[] = Array.isArray(currentData?.reviewHistory)
       ? currentData.reviewHistory
       : [];

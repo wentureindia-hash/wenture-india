@@ -58,18 +58,12 @@ export function InvestorCard({ investor }: InvestorCardProps) {
             </div>
           </div>
 
-          {/* Verified / Sample Status Badge */}
+          {/* Verified Status Badge */}
           <div className="shrink-0 pt-0.5">
-            {investor.isDemo ? (
-              <span className="px-1.5 sm:px-2 py-0.5 rounded text-[8.5px] sm:text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-[#5F7180] border border-slate-200 inline-block">
-                Sample
-              </span>
-            ) : (
-              <span className="px-1.5 sm:px-2 py-0.5 rounded text-[8.5px] sm:text-[10px] font-extrabold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200 inline-flex items-center gap-0.5 sm:gap-1">
-                <span className="material-symbols-outlined text-[10px] sm:text-[12px] text-emerald-600">verified</span>
-                <span className="hidden min-[360px]:inline">Verified</span>
-              </span>
-            )}
+            <span className="px-1.5 sm:px-2 py-0.5 rounded text-[8.5px] sm:text-[10px] font-extrabold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200 inline-flex items-center gap-0.5 sm:gap-1">
+              <span className="material-symbols-outlined text-[10px] sm:text-[12px] text-emerald-600">verified</span>
+              <span className="hidden min-[360px]:inline">Verified</span>
+            </span>
           </div>
         </div>
 

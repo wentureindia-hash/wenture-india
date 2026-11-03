@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { OPPORTUNITIES, Opportunity } from "@/lib/constants/opportunities";
+import { Opportunity } from "@/lib/constants/opportunities";
 import { getPublishedListings, convertListingToOpportunity } from "@/lib/firebase/listings";
 
 export default function AdminOpportunitiesPage() {
@@ -25,9 +25,7 @@ export default function AdminOpportunitiesPage() {
     loadData();
   }, []);
 
-  const allOpportunities = useMemo(() => {
-    return [...publishedListings, ...OPPORTUNITIES];
-  }, [publishedListings]);
+  const allOpportunities = publishedListings;
 
   const filtered = useMemo(() => {
     return allOpportunities.filter((item) => {
@@ -55,7 +53,7 @@ export default function AdminOpportunitiesPage() {
             Opportunity Catalog
           </h1>
           <p className="text-xs sm:text-sm text-[#5F7180] mt-1">
-            Browse and manage both core catalog opportunities and entrepreneur-approved live listings.
+            Browse and manage live approved listings in the public opportunity directory.
           </p>
         </div>
 
@@ -72,7 +70,7 @@ export default function AdminOpportunitiesPage() {
       {/* Filter and Search */}
       <div className="bg-white border border-[#DCECF2] rounded-2xl p-3.5 sm:p-5 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
         <div className="text-xs font-bold text-[#0A192A]">
-          Total Live Deals: <span className="text-[#00A6E8]">{allOpportunities.length}</span> ({publishedListings.length} Approved Submissions + {OPPORTUNITIES.length} Curated Core Deals)
+          Total Live Deals: <span className="text-[#00A6E8]">{allOpportunities.length}</span> Published Listings
         </div>
 
         <div className="relative w-full sm:w-72">

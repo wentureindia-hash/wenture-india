@@ -53,16 +53,10 @@ export function OpportunityCard({
 
         {/* Stage or Category Badge in Top-Right */}
         <div className="absolute top-1.5 sm:top-3 right-1.5 sm:right-3 z-10 flex items-center gap-1 flex-wrap justify-end">
-          {opportunity.isDemo ? (
-            <span className="bg-white/95 backdrop-blur-sm text-[#5F7180] font-bold text-[8.5px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded shadow-xs border border-slate-200 tracking-wide uppercase">
-              Sample
-            </span>
-          ) : (
-            <span className="bg-emerald-600/95 backdrop-blur-sm text-white font-extrabold text-[8.5px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded shadow-xs flex items-center gap-0.5 sm:gap-1 tracking-wide uppercase">
-              <span className="material-symbols-outlined text-[10px] sm:text-[12px]">verified</span>
-              Live
-            </span>
-          )}
+          <span className="bg-emerald-600/95 backdrop-blur-sm text-white font-extrabold text-[8.5px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded shadow-xs flex items-center gap-0.5 sm:gap-1 tracking-wide uppercase">
+            <span className="material-symbols-outlined text-[10px] sm:text-[12px]">verified</span>
+            Verified
+          </span>
           {opportunity.stageBadge && (
             <span className="bg-white/95 backdrop-blur-sm text-[#00658F] font-bold text-[8.5px] sm:text-[11px] px-1.5 sm:px-2.5 py-0.5 rounded shadow-xs border border-slate-100 tracking-wide hidden min-[360px]:inline-block">
               {opportunity.stageBadge}

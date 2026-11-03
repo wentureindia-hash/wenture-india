@@ -45,10 +45,10 @@ export function BrandLogo({
   return (
     <div
       className={cn(
-        "select-none group inline-flex",
+        "select-none group inline-flex shrink-0",
         layout === "vertical"
           ? "flex-col items-center text-center gap-2"
-          : "flex-row items-center gap-3",
+          : "flex-row items-center gap-2 sm:gap-2.5 xl:gap-3",
         className
       )}
     >
@@ -60,11 +60,11 @@ export function BrandLogo({
       {/* Typography: Wenture + India with Tricolor Leaf Dot */}
       <div
         className={cn(
-          "flex flex-col",
+          "flex flex-col shrink-0",
           layout === "vertical" ? "items-center" : "items-start"
         )}
       >
-        <div className="flex items-baseline font-extrabold tracking-tight font-heading leading-none">
+        <div className={cn("flex items-baseline font-extrabold tracking-tight font-heading leading-none whitespace-nowrap", titleSize)}>
           <span className={textColor}>Wenture</span>
           <span className={cn("relative inline-flex items-baseline", textColor)}>
             {/* Custom styled 'I' and 'ndia' with tricolor leaf dot */}

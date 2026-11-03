@@ -8,7 +8,6 @@ import { Footer } from "@/components/layout/footer";
 import { OpportunityCard } from "@/components/cards/opportunity-card";
 import { OpportunityEnquiryModal } from "@/components/forms/opportunity-enquiry-modal";
 import {
-  OPPORTUNITIES,
   INVESTMENT_RANGES,
   OPPORTUNITY_CATEGORIES,
   Opportunity,
@@ -45,7 +44,7 @@ function OpportunitiesContent() {
       const res = await getPublishedListings();
       if (!res.error && res.listings) {
         const converted = res.listings
-          .filter((item) => item.status === "published")
+          .filter((item) => item.status === "published" && !item.isDeleted)
           .map((item) => convertListingToOpportunity(item));
         setPublishedListings(converted);
       }
@@ -74,22 +73,10 @@ function OpportunitiesContent() {
     setSortBy("newest");
   };
 
-  // Combine live published listings (shown first) with demo opportunities
-  const allOpportunities = useMemo(() => {
-    const demoWithFlag = OPPORTUNITIES.map((opp) => ({ ...opp, isDemo: true }));
-    const liveSlugs = new Set(publishedListings.map((l) => l.slug));
-    const liveIds = new Set(publishedListings.map((l) => l.id));
-    const dedupedDemo = demoWithFlag.filter(
-      (d) =>
-        !liveSlugs.has(d.slug) &&
-        !liveSlugs.has(d.id) &&
-        !liveIds.has(d.id) &&
-        !liveIds.has(d.slug)
-    );
-    return [...publishedListings, ...dedupedDemo];
-  }, [publishedListings]);
+  // Display only real published listings from Firestore
+  const allOpportunities = publishedListings;
 
-  // Dynamically calculate accurate counts for each category based on all active + sample opportunities
+  // Dynamically calculate accurate counts for each category based on all active published opportunities
   const categoryCounts = useMemo(() => {
     const map: Record<string, number> = {
       All: allOpportunities.length,

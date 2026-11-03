@@ -159,16 +159,10 @@ export default function InvestorDetailPage() {
                         <h1 className="text-xl sm:text-3xl font-extrabold text-[#0A192A] font-heading">
                           {investor.investorName}
                         </h1>
-                        {investor.isDemo ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-100 text-[#5F7180] border border-slate-200">
-                            Sample Showcase
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <span className="material-symbols-outlined text-[12px] sm:text-[13px]">verified</span>
-                            Verified
-                          </span>
-                        )}
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-extrabold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <span className="material-symbols-outlined text-[12px] sm:text-[13px]">verified</span>
+                          Verified
+                        </span>
                       </div>
 
                       <div className="flex items-center gap-2 sm:gap-3 text-[11px] sm:text-xs text-[#5F7180] mt-1 flex-wrap">

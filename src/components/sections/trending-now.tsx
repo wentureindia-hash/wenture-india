@@ -14,12 +14,12 @@ interface TrendingItem {
 const TRENDING_ITEMS: TrendingItem[] = [
   {
     id: "trend-1",
-    tag: "Trending Opportunity",
-    title: "EcoVolt Energy Storage",
-    subtitle: "Modular battery storage systems and intelligent microgrid control units in CleanTech.",
-    link: "/opportunities/ecovolt-solutions",
-    icon: "bolt",
-    badgeColor: "bg-amber-100 text-amber-800",
+    tag: "Verified Catalog",
+    title: "Live Opportunities",
+    subtitle: "Explore verified ventures, commercial expansions, and growth capital listings.",
+    link: "/opportunities",
+    icon: "verified",
+    badgeColor: "bg-sky-100 text-sky-800",
   },
   {
     id: "trend-2",
@@ -41,11 +41,11 @@ const TRENDING_ITEMS: TrendingItem[] = [
   },
   {
     id: "trend-4",
-    tag: "Featured Business",
-    title: "Apex Precision Tooling",
-    subtitle: "10+ years established CNC precision machining unit supplying automotive and industrial sectors.",
-    link: "/opportunities/apex-cnc-manufacturing",
-    icon: "precision_manufacturing",
+    tag: "Investor Network",
+    title: "Accredited Investor Directory",
+    subtitle: "Connect directly with verified angel investors, family offices, and syndicate leaders.",
+    link: "/investors",
+    icon: "groups",
     badgeColor: "bg-purple-100 text-purple-800",
   },
 ];
@@ -99,7 +99,7 @@ export function TrendingNow() {
                   </span>
                 </div>
 
-                <h3 className="font-bold text-xs sm:text-base text-[#0A192A] group-hover:text-[#00A6E8] transition-colors mb-1 sm:mb-1.5 leading-snug line-clamp-2">
+                <h3 className="text-xs sm:text-base font-bold text-[#0A192A] mb-1 group-hover:text-[#00A6E8] transition-colors leading-snug line-clamp-2">
                   {item.title}
                 </h3>
 
@@ -108,9 +108,9 @@ export function TrendingNow() {
                 </p>
               </div>
 
-              <div className="mt-3 sm:mt-4 pt-2 sm:pt-3 border-t border-[#DCECF2] flex items-center justify-between text-[10px] sm:text-xs font-semibold text-[#00A6E8]">
+              <div className="flex items-center gap-1 text-[10px] sm:text-xs font-bold text-[#00A6E8] group-hover:text-[#00658F] transition-colors pt-2 sm:pt-3 border-t border-[#DCECF2]/60 mt-2 sm:mt-3">
                 <span>Explore</span>
-                <span className="material-symbols-outlined text-[13px] sm:text-[16px] group-hover:translate-x-1 transition-transform">
+                <span className="material-symbols-outlined text-[13px] sm:text-[15px] group-hover:translate-x-0.5 transition-transform">
                   arrow_forward
                 </span>
               </div>

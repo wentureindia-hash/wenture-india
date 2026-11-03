@@ -9,7 +9,7 @@ import { OpportunityCard } from "@/components/cards/opportunity-card";
 import { OpportunityEnquiryModal } from "@/components/forms/opportunity-enquiry-modal";
 import { JoinCta } from "@/components/ui/join-cta";
 import { InvestorBottomCta } from "@/components/sections/investor-bottom-cta";
-import { OPPORTUNITIES, Opportunity } from "@/lib/constants/opportunities";
+import { Opportunity } from "@/lib/constants/opportunities";
 import { getPublishedListings, convertListingToOpportunity } from "@/lib/firebase/listings";
 
 export default function ForInvestorsPage() {
@@ -27,19 +27,7 @@ export default function ForInvestorsPage() {
     load();
   }, []);
 
-  const featuredOpps = useMemo(() => {
-    const demoWithFlag = OPPORTUNITIES.map((opp) => ({ ...opp, isDemo: true }));
-    const liveSlugs = new Set(publishedOpps.map((l) => l.slug));
-    const liveIds = new Set(publishedOpps.map((l) => l.id));
-    const dedupedDemo = demoWithFlag.filter(
-      (d) =>
-        !liveSlugs.has(d.slug) &&
-        !liveSlugs.has(d.id) &&
-        !liveIds.has(d.id) &&
-        !liveIds.has(d.slug)
-    );
-    return [...publishedOpps, ...dedupedDemo].slice(0, 3);
-  }, [publishedOpps]);
+  const featuredOpps = publishedOpps.slice(0, 3);
 
   const handleEnquire = (opp: Opportunity) => {
     setSelectedOpportunity(opp);
@@ -139,7 +127,7 @@ export default function ForInvestorsPage() {
                     </p>
                   </div>
                   <Link
-                    href="/opportunities/ledgerflow-ai"
+                    href="/opportunities"
                     className="text-primary-container hover:text-primary font-button-text text-xs sm:text-sm flex items-center gap-1 font-semibold"
                   >
                     <span>View Details</span>

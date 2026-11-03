@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import {
-  OPPORTUNITIES,
   OPPORTUNITY_CATEGORIES,
   Opportunity,
   OpportunityCategory,
@@ -44,19 +43,7 @@ export function TopOpportunities({
     load();
   }, []);
 
-  const combinedOpportunities = useMemo(() => {
-    const demoWithFlag = OPPORTUNITIES.map((opp) => ({ ...opp, isDemo: true }));
-    const liveSlugs = new Set(publishedOpps.map((l) => l.slug));
-    const liveIds = new Set(publishedOpps.map((l) => l.id));
-    const dedupedDemo = demoWithFlag.filter(
-      (d) =>
-        !liveSlugs.has(d.slug) &&
-        !liveSlugs.has(d.id) &&
-        !liveIds.has(d.id) &&
-        !liveIds.has(d.slug)
-    );
-    return [...publishedOpps, ...dedupedDemo];
-  }, [publishedOpps]);
+  const combinedOpportunities = publishedOpps;
 
   const filteredOpportunities = combinedOpportunities
     .filter((opp) => opp.category.toLowerCase() === activeCategory.toLowerCase())
@@ -130,10 +117,17 @@ export function TopOpportunities({
             ))}
           </div>
         ) : (
-          <div className="text-center py-12 bg-[#F6FAFF] rounded-2xl border border-[#DCECF2]">
-            <p className="text-sm text-[#5F7180]">
-              No opportunities currently listed under {activeCategory}. Please check back shortly.
+          <div className="text-center py-12 px-4 bg-[#F6FAFF] rounded-2xl border border-[#DCECF2]">
+            <p className="text-sm font-medium text-[#5F7180] mb-3">
+              No live opportunities currently listed under {activeCategory}.
             </p>
+            <Link
+              href="/profile/listings"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-[#00A6E8] hover:text-[#00658F] transition-colors"
+            >
+              <span>List your opportunity in this category</span>
+              <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+            </Link>
           </div>
         )}
 

@@ -91,7 +91,13 @@ export function isValidPrivateKey(key: string): boolean {
  */
 export function isValidClientEmail(email: string): boolean {
   if (!email || typeof email !== "string") return false;
-  const trimmed = email.trim().toLowerCase();
+  let trimmed = email.trim().toLowerCase();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    trimmed = trimmed.slice(1, -1).trim();
+  }
   return (
     trimmed.includes("@") &&
     trimmed.includes(".") &&
@@ -103,7 +109,7 @@ export function isValidClientEmail(email: string): boolean {
  * Resolves Firebase service account credentials from environment variables.
  * Supports:
  * 1. Individual variables: FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY, FIREBASE_PROJECT_ID
- * 2. Full JSON string: FIREBASE_SERVICE_ACCOUNT_KEY or FIREBASE_SERVICE_ACCOUNT
+ * 2. Full JSON string: FIREBASE_SERVICE_ACCOUNT_KEY or FIREBASE_SERVICE_ACCOUNT (raw, quoted, or Base64)
  */
 export function resolveFirebaseCredentials(): {
   hasCredentials: boolean;
@@ -114,36 +120,64 @@ export function resolveFirebaseCredentials(): {
   const missingFields: string[] = [];
 
   // 1. Check for complete service-account JSON variable
-  const jsonBlob =
+  const rawJsonBlob =
     process.env.FIREBASE_SERVICE_ACCOUNT_KEY ||
     process.env.FIREBASE_SERVICE_ACCOUNT ||
-    process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+    process.env.GOOGLE_SERVICE_ACCOUNT_JSON ||
+    process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
 
-  if (jsonBlob && jsonBlob.trim().startsWith("{")) {
-    try {
-      const parsed = JSON.parse(jsonBlob.trim());
-      const pKey = formatPrivateKey(parsed.private_key || "");
-      const cEmail = (parsed.client_email || "").trim();
-      const pId =
-        (parsed.project_id || "").trim() ||
-        process.env.FIREBASE_PROJECT_ID ||
-        process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
-        "wenture-india";
+  if (rawJsonBlob) {
+    let cleanBlob = rawJsonBlob.trim();
+    // Strip outer quotes if wrapped in single or double quotes
+    while (cleanBlob.startsWith("'") || cleanBlob.startsWith('"')) {
+      cleanBlob = cleanBlob.slice(1).trim();
+    }
+    while (cleanBlob.endsWith("'") || cleanBlob.endsWith('"')) {
+      cleanBlob = cleanBlob.slice(0, -1).trim();
+    }
 
-      if (isValidPrivateKey(pKey) && isValidClientEmail(cEmail) && pId) {
-        return {
-          hasCredentials: true,
-          credentials: {
-            projectId: pId,
-            clientEmail: cEmail,
-            privateKey: pKey,
-          },
-          missingFields: [],
-          configSource: "json_variable",
-        };
+    // If Base64 encoded, decode it
+    if (!cleanBlob.startsWith("{")) {
+      try {
+        const decoded = Buffer.from(cleanBlob, "base64").toString("utf8").trim();
+        if (decoded.startsWith("{")) {
+          cleanBlob = decoded;
+        }
+      } catch {}
+    }
+
+    if (cleanBlob.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(cleanBlob);
+        const pKey = formatPrivateKey(parsed.private_key || "");
+        let cEmail = (parsed.client_email || "").trim();
+        if (
+          (cEmail.startsWith('"') && cEmail.endsWith('"')) ||
+          (cEmail.startsWith("'") && cEmail.endsWith("'"))
+        ) {
+          cEmail = cEmail.slice(1, -1).trim();
+        }
+        const pId =
+          (parsed.project_id || "").trim() ||
+          process.env.FIREBASE_PROJECT_ID ||
+          process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
+          "wenture-india";
+
+        if (isValidPrivateKey(pKey) && isValidClientEmail(cEmail) && pId) {
+          return {
+            hasCredentials: true,
+            credentials: {
+              projectId: pId,
+              clientEmail: cEmail,
+              privateKey: pKey,
+            },
+            missingFields: [],
+            configSource: "json_variable",
+          };
+        }
+      } catch {
+        // JSON parse failed; fall through to individual environment variables
       }
-    } catch {
-      // JSON parse failed; fall through to individual environment variables
     }
   }
 
@@ -156,7 +190,13 @@ export function resolveFirebaseCredentials(): {
     "wenture-india";
 
   const formattedKey = formatPrivateKey(rawPrivateKey);
-  const trimmedEmail = rawClientEmail.trim();
+  let trimmedEmail = rawClientEmail.trim();
+  if (
+    (trimmedEmail.startsWith('"') && trimmedEmail.endsWith('"')) ||
+    (trimmedEmail.startsWith("'") && trimmedEmail.endsWith("'"))
+  ) {
+    trimmedEmail = trimmedEmail.slice(1, -1).trim();
+  }
 
   if (!isValidClientEmail(trimmedEmail)) {
     missingFields.push("FIREBASE_CLIENT_EMAIL");
@@ -419,4 +459,16 @@ export function getAdminFirestore(): admin.firestore.Firestore | null {
     return null;
   }
   return admin.firestore(app);
+}
+
+/**
+ * Returns the Firebase Admin Auth instance if explicit credentials are provisioned,
+ * or null if credentials are not configured.
+ */
+export function getAdminAuth(): admin.auth.Auth | null {
+  const app = getFirebaseAdminApp();
+  if (!app) {
+    return null;
+  }
+  return admin.auth(app);
 }

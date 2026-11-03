@@ -100,10 +100,23 @@ export function ActiveInvestorsShowcase({
             ))}
           </div>
         ) : (
-          <div className="text-center py-12 bg-white rounded-2xl border border-[#DCECF2] p-8">
-            <p className="text-sm text-[#5F7180]">
-              Investor directory profiles are currently loading.
+          <div className="text-center py-12 bg-white rounded-2xl border border-[#DCECF2] p-8 max-w-md mx-auto">
+            <span className="material-symbols-outlined text-[36px] text-slate-300 mb-2 block">
+              person_search
+            </span>
+            <p className="text-sm font-bold text-[#0A192A] mb-1">
+              No Approved Investors Listed Yet
             </p>
+            <p className="text-xs text-[#5F7180] mb-4">
+              Verified investor profiles will appear here as they are reviewed and approved.
+            </p>
+            <Link
+              href="/profile/investor"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-[#00A6E8] hover:underline"
+            >
+              <span>Get listed as an investor</span>
+              <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+            </Link>
           </div>
         )}
 

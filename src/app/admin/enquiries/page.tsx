@@ -1,10 +1,13 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { auth } from "@/lib/firebase/client";
 import {
   getAllOpportunityEnquiries,
   getAllContactInquiries,
   updateEnquiryStatus,
+  deleteOpportunityEnquiry,
+  deleteContactInquiry,
   OpportunityEnquiry,
   ContactSubmission,
   EnquiryStatus,
@@ -18,6 +21,24 @@ export default function AdminEnquiriesPage() {
   const [contactInquiries, setContactInquiries] = useState<ContactSubmission[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+
+  // Single Enquiry Deletion State
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{
+    id: string;
+    type: "opportunity" | "contact";
+    title: string;
+    sender: string;
+  } | null>(null);
+
+  // Bulk Clear Modal & Operation State
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [confirmPhrase, setConfirmPhrase] = useState("");
+  const [notification, setNotification] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
 
   // Filter States for Opportunity Enquiries
   const [selectedOpportunity, setSelectedOpportunity] = useState<string>("all");
@@ -53,6 +74,131 @@ export default function AdminEnquiriesPage() {
     await updateEnquiryStatus(collection, id, newStatus);
     setUpdatingId(null);
     await loadEnquiries();
+  };
+
+  const handleDeleteSingleEnquiry = async () => {
+    if (!deleteConfirmTarget) return;
+    const { id, type } = deleteConfirmTarget;
+    setDeletingId(id);
+    setNotification(null);
+    try {
+      let deleted = false;
+      const idToken = await auth.currentUser?.getIdToken();
+
+      // Attempt 1: Server-side Firebase Admin API
+      if (idToken) {
+        try {
+          const res = await fetch("/api/admin/enquiries/delete", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify({ id, type }),
+          });
+          const data = await res.json();
+          if (res.ok && data.success) {
+            deleted = true;
+          }
+        } catch (fetchErr) {
+          console.warn("[handleDeleteSingleEnquiry] API error, falling back to client SDK:", fetchErr);
+        }
+      }
+
+      // Attempt 2: Client SDK direct deletion fallback
+      if (!deleted) {
+        if (type === "opportunity") {
+          const res = await deleteOpportunityEnquiry(id);
+          if (res.success) {
+            deleted = true;
+          } else {
+            throw new Error(res.error || "Failed to delete opportunity enquiry");
+          }
+        } else {
+          const res = await deleteContactInquiry(id);
+          if (res.success) {
+            deleted = true;
+          } else {
+            throw new Error(res.error || "Failed to delete general contact message");
+          }
+        }
+      }
+
+      if (deleted) {
+        setNotification({
+          type: "success",
+          message: `Successfully deleted ${
+            type === "opportunity" ? "opportunity enquiry" : "general contact message"
+          }.`,
+        });
+        // Optimistic UI removal
+        if (type === "opportunity") {
+          setOppEnquiries((prev) => prev.filter((e) => e.id !== id));
+        } else {
+          setContactInquiries((prev) => prev.filter((c) => c.id !== id));
+        }
+        setDeleteConfirmTarget(null);
+      }
+    } catch (err: unknown) {
+      const error = err as Error;
+      setNotification({
+        type: "error",
+        message: error.message || "Failed to delete enquiry.",
+      });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleClearAllOpportunityEnquiries = async () => {
+    setClearing(true);
+    setNotification(null);
+    try {
+      const idToken = await auth.currentUser?.getIdToken();
+      if (!idToken) {
+        setNotification({
+          type: "error",
+          message: "Authentication required. Please re-sign in.",
+        });
+        setClearing(false);
+        return;
+      }
+
+      const res = await fetch("/api/admin/enquiries/clear-all", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setNotification({
+          type: "success",
+          message:
+            data.totalDeleted > 0
+              ? `Successfully cleared all ${data.totalDeleted} opportunity enquiries. The inbox is now clean for launch.`
+              : "The opportunity enquiry inbox is already clean.",
+        });
+        setShowClearModal(false);
+        setConfirmPhrase("");
+        await loadEnquiries();
+      } else {
+        setNotification({
+          type: "error",
+          message: data.error || "Failed to clear opportunity enquiries.",
+        });
+      }
+    } catch (err: unknown) {
+      const error = err as Error;
+      setNotification({
+        type: "error",
+        message: error.message || "Network error while clearing enquiries.",
+      });
+    } finally {
+      setClearing(false);
+    }
   };
 
   const formatDate = (createdAt: unknown) => {
@@ -126,15 +272,63 @@ export default function AdminEnquiriesPage() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={loadEnquiries}
-          className="px-4 py-2 bg-white border border-[#DCECF2] hover:bg-slate-50 text-[#0A192A] text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 self-stretch sm:self-auto shadow-sm"
-        >
-          <span className="material-symbols-outlined text-[16px] text-[#00A6E8]">refresh</span>
-          <span>Refresh</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2 self-stretch sm:self-auto">
+          {activeTab === "opportunity" && (
+            <button
+              type="button"
+              onClick={() => {
+                setNotification(null);
+                setShowClearModal(true);
+              }}
+              disabled={clearing || oppEnquiries.length === 0}
+              className="px-4 py-2 bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              title={
+                oppEnquiries.length === 0
+                  ? "Opportunity inbox is already clean"
+                  : "Permanently clear all opportunity enquiries"
+              }
+            >
+              <span className="material-symbols-outlined text-[16px] text-rose-600">
+                delete_sweep
+              </span>
+              <span>Clear All Opportunity Enquiries</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={loadEnquiries}
+            className="px-4 py-2 bg-white border border-[#DCECF2] hover:bg-slate-50 text-[#0A192A] text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-sm"
+          >
+            <span className="material-symbols-outlined text-[16px] text-[#00A6E8]">refresh</span>
+            <span>Refresh</span>
+          </button>
+        </div>
       </div>
+
+      {notification && (
+        <div
+          className={`p-4 rounded-2xl border text-xs flex items-center justify-between gap-3 ${
+            notification.type === "success"
+              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+              : "bg-rose-50 border-rose-200 text-rose-800"
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-[18px]">
+              {notification.type === "success" ? "check_circle" : "error"}
+            </span>
+            <span className="font-semibold">{notification.message}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setNotification(null)}
+            className="text-slate-400 hover:text-slate-600"
+          >
+            <span className="material-symbols-outlined text-[16px]">close</span>
+          </button>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex items-center gap-2 p-1.5 bg-white border border-[#DCECF2] rounded-2xl overflow-x-auto no-scrollbar shadow-sm">
@@ -353,23 +547,46 @@ export default function AdminEnquiriesPage() {
                           {formatDate(enq.createdAt)}
                         </td>
                         <td className="py-4 px-4 sm:px-6">
-                          <select
-                            value={statusVal}
-                            disabled={updatingId === enq.id}
-                            onChange={(e) =>
-                              handleStatusChange(
-                                "opportunity_enquiries",
-                                enq.id,
-                                e.target.value as EnquiryStatus
-                              )
-                            }
-                            className={`px-2.5 py-1.5 text-xs font-bold rounded-xl border focus:outline-none cursor-pointer ${statusClass}`}
-                          >
-                            <option value="New">New</option>
-                            <option value="Contacted">Contacted</option>
-                            <option value="In Discussion">In Discussion</option>
-                            <option value="Closed">Closed</option>
-                          </select>
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={statusVal}
+                              disabled={updatingId === enq.id || deletingId === enq.id}
+                              onChange={(e) =>
+                                handleStatusChange(
+                                  "opportunity_enquiries",
+                                  enq.id,
+                                  e.target.value as EnquiryStatus
+                                )
+                              }
+                              className={`px-2.5 py-1.5 text-xs font-bold rounded-xl border focus:outline-none cursor-pointer ${statusClass}`}
+                            >
+                              <option value="New">New</option>
+                              <option value="Contacted">Contacted</option>
+                              <option value="In Discussion">In Discussion</option>
+                              <option value="Closed">Closed</option>
+                            </select>
+
+                            <button
+                              type="button"
+                              disabled={updatingId === enq.id || deletingId === enq.id}
+                              onClick={() =>
+                                setDeleteConfirmTarget({
+                                  id: enq.id!,
+                                  type: "opportunity",
+                                  title: enq.opportunityTitle || "Opportunity Enquiry",
+                                  sender: enq.senderName || enq.name || "Sender",
+                                })
+                              }
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer disabled:opacity-40"
+                              title="Delete this opportunity enquiry"
+                            >
+                              {deletingId === enq.id ? (
+                                <div className="w-4 h-4 border-2 border-rose-500 border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <span className="material-symbols-outlined text-[18px]">delete</span>
+                              )}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -415,28 +632,51 @@ export default function AdminEnquiriesPage() {
                           <p className="line-clamp-2 leading-relaxed">{ci.message}</p>
                         </td>
                         <td className="py-4 px-4 sm:px-6">
-                          <select
-                            value={status}
-                            disabled={updatingId === ci.id}
-                            onChange={(e) =>
-                              handleStatusChange(
-                                "contact_inquiries",
-                                ci.id,
-                                e.target.value as "new" | "contacted" | "closed"
-                              )
-                            }
-                            className={`px-2.5 py-1 text-xs font-bold rounded-lg border focus:outline-none ${
-                              status === "new"
-                                ? "bg-amber-50 text-amber-800 border-amber-200"
-                                : status === "contacted"
-                                ? "bg-sky-50 text-sky-800 border-sky-200"
-                                : "bg-emerald-50 text-emerald-800 border-emerald-200"
-                            }`}
-                          >
-                            <option value="new">New</option>
-                            <option value="contacted">Contacted</option>
-                            <option value="closed">Closed</option>
-                          </select>
+                          <div className="flex items-center gap-2">
+                            <select
+                              value={status}
+                              disabled={updatingId === ci.id || deletingId === ci.id}
+                              onChange={(e) =>
+                                handleStatusChange(
+                                  "contact_inquiries",
+                                  ci.id,
+                                  e.target.value as "new" | "contacted" | "closed"
+                                )
+                              }
+                              className={`px-2.5 py-1 text-xs font-bold rounded-lg border focus:outline-none cursor-pointer ${
+                                status === "new"
+                                  ? "bg-amber-50 text-amber-800 border-amber-200"
+                                  : status === "contacted"
+                                  ? "bg-sky-50 text-sky-800 border-sky-200"
+                                  : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                              }`}
+                            >
+                              <option value="new">New</option>
+                              <option value="contacted">Contacted</option>
+                              <option value="closed">Closed</option>
+                            </select>
+
+                            <button
+                              type="button"
+                              disabled={updatingId === ci.id || deletingId === ci.id}
+                              onClick={() =>
+                                setDeleteConfirmTarget({
+                                  id: ci.id!,
+                                  type: "contact",
+                                  title: ci.subject || "General Contact Enquiry",
+                                  sender: ci.fullName || ci.email || "Sender",
+                                })
+                              }
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer disabled:opacity-40"
+                              title="Delete this contact message"
+                            >
+                              {deletingId === ci.id ? (
+                                <div className="w-4 h-4 border-2 border-rose-500 border-t-transparent rounded-full animate-spin" />
+                              ) : (
+                                <span className="material-symbols-outlined text-[18px]">delete</span>
+                              )}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -447,6 +687,172 @@ export default function AdminEnquiriesPage() {
           )
         )}
       </div>
+
+      {/* Clear All Opportunity Enquiries Confirmation Modal */}
+      {showClearModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl border border-[#DCECF2] max-w-lg w-full p-6 sm:p-8 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600">
+                <span className="material-symbols-outlined text-[28px]">delete_forever</span>
+              </div>
+              <div>
+                <h3 className="text-xl font-extrabold text-[#0A192A] font-heading">
+                  Clear All Opportunity Enquiries
+                </h3>
+                <p className="text-xs text-[#5F7180]">Pre-Launch Bulk Inbox Purge</p>
+              </div>
+            </div>
+
+            <div className="bg-rose-50/70 border border-rose-200 rounded-2xl p-4 text-xs space-y-2 text-rose-900">
+              <p className="font-bold flex items-center gap-1.5 text-rose-700">
+                <span className="material-symbols-outlined text-[16px]">warning</span>
+                <span>Permanent Deletion Warning</span>
+              </p>
+              <p>
+                This action will permanently delete all{" "}
+                <strong>{oppEnquiries.length}</strong> opportunity enquiry records from the{" "}
+                <code className="bg-rose-100 px-1 py-0.5 rounded font-mono">
+                  opportunity_enquiries
+                </code>{" "}
+                Firestore collection.
+              </p>
+              <div className="pt-2 border-t border-rose-200/80 text-[11px] text-[#5F7180] space-y-1">
+                <p className="font-semibold text-slate-700">Strict Data Protection Guarantee:</p>
+                <ul className="list-disc pl-4 space-y-0.5">
+                  <li>Actual business opportunities and listings remain completely intact.</li>
+                  <li>Investor profiles and authentication accounts remain untouched.</li>
+                  <li>
+                    Investor enquiries (<code>investor_enquiries</code>) are not affected.
+                  </li>
+                  <li>Storage files, pitch decks, and KYC verifications remain untouched.</li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-[#0A192A] block">
+                To confirm permanent deletion, type{" "}
+                <span className="font-mono text-rose-600 font-extrabold">DELETE</span> below:
+              </label>
+              <input
+                type="text"
+                value={confirmPhrase}
+                onChange={(e) => setConfirmPhrase(e.target.value)}
+                placeholder="DELETE"
+                disabled={clearing}
+                className="w-full px-4 py-2.5 bg-slate-50 border border-[#DCECF2] rounded-xl text-sm font-semibold text-[#0A192A] focus:outline-none focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 uppercase tracking-wider font-mono disabled:opacity-50"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowClearModal(false);
+                  setConfirmPhrase("");
+                }}
+                disabled={clearing}
+                className="px-5 py-2.5 bg-white border border-[#DCECF2] hover:bg-slate-50 text-[#5F7180] text-xs font-bold rounded-xl transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleClearAllOpportunityEnquiries}
+                disabled={clearing || confirmPhrase !== "DELETE"}
+                className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-2 shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {clearing ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Clearing Inboxes...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[16px]">delete_sweep</span>
+                    <span>Permanently Delete All ({oppEnquiries.length})</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Single Enquiry Deletion Confirmation Modal */}
+      {deleteConfirmTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl border border-[#DCECF2] max-w-md w-full p-6 sm:p-7 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shrink-0">
+                <span className="material-symbols-outlined text-[24px]">delete</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-extrabold text-[#0A192A] font-heading">
+                  Delete Enquiry
+                </h3>
+                <p className="text-xs text-[#5F7180]">
+                  Permanently remove this {deleteConfirmTarget.type === "opportunity" ? "opportunity enquiry" : "contact message"}
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 border border-[#DCECF2] rounded-2xl p-4 text-xs space-y-2.5">
+              <div>
+                <span className="text-[10px] font-bold text-[#5F7180] uppercase tracking-wider block mb-0.5">
+                  Sender
+                </span>
+                <span className="font-bold text-[#0A192A] text-sm block">
+                  {deleteConfirmTarget.sender}
+                </span>
+              </div>
+              <div className="pt-2 border-t border-[#DCECF2]/70">
+                <span className="text-[10px] font-bold text-[#5F7180] uppercase tracking-wider block mb-0.5">
+                  {deleteConfirmTarget.type === "opportunity" ? "Opportunity" : "Subject"}
+                </span>
+                <span className="font-semibold text-[#00658F] block">
+                  {deleteConfirmTarget.title}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl p-3 font-medium flex items-center gap-2">
+              <span className="material-symbols-outlined text-[16px] shrink-0 text-rose-600">warning</span>
+              <span>This enquiry will be permanently deleted from the database. This action cannot be undone.</span>
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteConfirmTarget(null)}
+                disabled={Boolean(deletingId)}
+                className="px-4 py-2 bg-white border border-[#DCECF2] hover:bg-slate-50 text-[#5F7180] text-xs font-bold rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteSingleEnquiry}
+                disabled={Boolean(deletingId)}
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
+              >
+                {deletingId ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-[16px]">delete</span>
+                    <span>Delete Record</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

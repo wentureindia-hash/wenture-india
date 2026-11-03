@@ -158,6 +158,9 @@ export default function AdminInvestorsPage() {
 
   const filteredInvestors = useMemo(() => {
     return investors.filter((inv) => {
+      if (inv.status === "deleted" || inv.isDeleted) {
+        return false;
+      }
       if (statusFilter !== "all" && inv.status !== statusFilter) {
         return false;
       }

@@ -1593,10 +1593,10 @@ export default function ProfilePage() {
             </div>
 
             <h3 className="text-xl font-bold text-[#0A192A] mb-2 font-heading">
-              Delete your account?
+              Permanently delete your account?
             </h3>
-            <p className="text-sm text-[#5F7180] leading-relaxed mb-6">
-              This action is permanent and cannot be undone. Your Wenture India account and associated profile information will be deleted.
+            <p className="text-xs sm:text-sm text-[#5F7180] leading-relaxed mb-6">
+              This action is permanent and cannot be undone. All your public profiles, business listings, investor profiles, uploaded documents, pitch decks, and account information will be permanently removed across all roles.
             </p>
 
             {deleteError && (

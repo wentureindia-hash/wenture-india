@@ -558,27 +558,116 @@ export function onAuthChanged(callback: (user: User | null) => void) {
 }
 
 /**
- * Permanently delete current user's profile from Firestore and Auth account
+ * Permanently delete current user's profile, listings, storage assets, and Auth account.
+ * Orchestrates server-side cascade cleanup across Firestore, Supabase Storage, and Firebase Auth.
  */
 export async function deleteUserAccount(): Promise<{ error: string | null; requiresRecentLogin?: boolean }> {
   try {
     const user = auth.currentUser;
     if (!user) {
-      return { error: "No authenticated user found." };
+      return { error: "No authenticated user found. Please sign in and try again." };
     }
 
     const uid = user.uid;
 
-    // 1. Delete Firestore user profile document
+    // 1. Obtain fresh Firebase ID Token for authenticated server orchestration
+    let idToken: string;
     try {
-      const docRef = doc(db, "users", uid);
-      await deleteDoc(docRef);
-    } catch {
-      // Continue to Auth deletion if firestore doc is already missing
+      idToken = await user.getIdToken(true);
+    } catch (tokenErr: unknown) {
+      const err = tokenErr as { code?: string };
+      if (err.code === "auth/requires-recent-login" || err.code === "auth/user-token-expired") {
+        return {
+          error: "For security reasons, please sign in again before deleting your account.",
+          requiresRecentLogin: true,
+        };
+      }
+      idToken = await user.getIdToken(false);
     }
 
-    // 2. Delete Firebase Auth account
-    await deleteUser(user);
+    // 2. Call secure server-side cascading deletion endpoint
+    let serverSuccess = false;
+    let authAlreadyDeleted = false;
+    let serverErrorMessage: string | null = null;
+
+    try {
+      const apiRes = await fetch("/api/user/delete-account", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+      });
+
+      if (apiRes.ok) {
+        const data = await apiRes.json();
+        serverSuccess = true;
+        authAlreadyDeleted = Boolean(data.authDeleted);
+      } else {
+        const errorData = await apiRes.json().catch(() => null);
+        serverErrorMessage = errorData?.error || null;
+        console.warn("[deleteUserAccount] Server API returned failure:", errorData);
+      }
+    } catch (fetchErr) {
+      console.warn("[deleteUserAccount] Network error reaching deletion API:", fetchErr);
+      serverErrorMessage = "Network error communicating with the deletion service. Please check your connection and retry.";
+    }
+
+    // 3. If server-side cascade failed: prevent premature Auth deletion and return failure
+    if (!serverSuccess) {
+      // Immediate public visibility removal as an emergency safeguard
+      try {
+        const userRef = doc(db, "users", uid);
+        await setDoc(
+          userRef,
+          {
+            accountStatus: "deletion_pending",
+            isDeleted: true,
+            status: "deleted",
+          },
+          { merge: true }
+        );
+
+        const invRef = doc(db, "investorProfiles", uid);
+        await setDoc(
+          invRef,
+          {
+            status: "deleted",
+            isDeleted: true,
+            isPublic: false,
+          },
+          { merge: true }
+        );
+      } catch (fbErr) {
+        console.warn("[deleteUserAccount] Emergency visibility hide warning:", fbErr);
+      }
+
+      // Do NOT report premature success or delete Auth account if server cascade failed
+      return {
+        error:
+          serverErrorMessage ||
+          "We could not complete your account deletion right now. Your profile has been paused from public view. Please retry shortly.",
+      };
+    }
+
+    // 4. Delete Firebase Auth account if not already deleted by server Admin SDK
+    if (!authAlreadyDeleted) {
+      try {
+        await deleteUser(user);
+      } catch (authDelErr: unknown) {
+        const err = authDelErr as { code?: string; message?: string };
+        if (err.code === "auth/requires-recent-login") {
+          return {
+            error: "For security reasons, please sign in again before deleting your account.",
+            requiresRecentLogin: true,
+          };
+        }
+        // If user already deleted by server, ignore error
+        if (err.code !== "auth/user-not-found") {
+          console.warn("[deleteUserAccount] Auth deletion error:", err);
+        }
+      }
+    }
 
     return { error: null };
   } catch (err: unknown) {

@@ -1,5 +1,4 @@
 import type { MetadataRoute } from "next";
-import { OPPORTUNITIES } from "@/lib/constants/opportunities";
 import { GUIDES } from "@/lib/constants/guides";
 
 export default function sitemap(): MetadataRoute.Sitemap {
@@ -21,13 +20,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${baseUrl}/signup`, lastModified: now, changeFrequency: "yearly", priority: 0.6 },
   ];
 
-  const opportunityRoutes: MetadataRoute.Sitemap = OPPORTUNITIES.map((opp) => ({
-    url: `${baseUrl}/opportunities/${opp.slug}`,
-    lastModified: now,
-    changeFrequency: "weekly",
-    priority: 0.85,
-  }));
-
   const guideRoutes: MetadataRoute.Sitemap = GUIDES.map((guide) => ({
     url: `${baseUrl}/guides/${guide.slug}`,
     lastModified: now,
@@ -35,5 +27,5 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.8,
   }));
 
-  return [...staticRoutes, ...opportunityRoutes, ...guideRoutes];
+  return [...staticRoutes, ...guideRoutes];
 }

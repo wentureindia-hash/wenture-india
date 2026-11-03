@@ -7,6 +7,7 @@ import {
   getDocs,
   updateDoc,
   deleteDoc,
+  writeBatch,
   query,
   where,
   orderBy,
@@ -16,7 +17,7 @@ import { auth, db } from "./client";
 import { uploadPitchDeckFile, uploadListingImageFile, getSignedDocumentUrl } from "./storage";
 import { Opportunity, InvestmentRangeCategory, OpportunityCategory } from "@/lib/constants/opportunities";
 
-export type ListingStatus = "pending" | "published" | "rejected";
+export type ListingStatus = "pending" | "published" | "rejected" | "changes_requested" | "deleted";
 
 export type ListingType =
   | "Investment"
@@ -232,6 +233,8 @@ export interface BusinessListing {
   createdAt: unknown;
   updatedAt: unknown;
   publishedAt?: unknown;
+  isDeleted?: boolean;
+  accountStatus?: string;
 }
 
 export type CreateListingInput = Omit<
@@ -284,6 +287,19 @@ export async function createListing(
     if (!currentUser) {
       console.warn("[createListing] No authenticated Firebase user found.");
       return { id: null, error: "You must be signed in as an entrepreneur to submit a listing." };
+    }
+
+    // Block listing creation if user account is scheduled for deletion
+    try {
+      const userDocSnap = await getDoc(doc(db, "users", currentUser.uid));
+      if (userDocSnap.exists()) {
+        const uData = userDocSnap.data();
+        if (uData.accountStatus === "deletion_pending" || uData.isDeleted || uData.status === "deleted") {
+          return { id: null, error: "Your account is scheduled for deletion. New submissions are disabled." };
+        }
+      }
+    } catch {
+      // Best-effort check
     }
 
     const hasPitchDeck = Boolean(input.pitchDeckUrl || input.pitchDeckStoragePath);
@@ -389,6 +405,12 @@ export function normalizeListing(docId: string, rawData: Record<string, unknown>
 
   let status: ListingStatus = "pending";
   if (
+    rawStatus === "deleted" ||
+    rawData.isDeleted === true ||
+    rawData.accountStatus === "deletion_pending"
+  ) {
+    status = "deleted";
+  } else if (
     rawStatus === "published" ||
     rawStatus === "approved" ||
     rawStatus === "live" ||
@@ -401,6 +423,12 @@ export function normalizeListing(docId: string, rawData: Record<string, unknown>
     rawStatus === "disapproved"
   ) {
     status = "rejected";
+  } else if (
+    rawStatus === "changes_requested" ||
+    rawStatus === "revision_requested" ||
+    rawStatus === "needs_revision"
+  ) {
+    status = "changes_requested";
   } else {
     // Older or unapproved listings default to "pending" review
     status = "pending";
@@ -591,6 +619,8 @@ export function normalizeListing(docId: string, rawData: Record<string, unknown>
     createdAt,
     updatedAt,
     publishedAt: rawData.publishedAt || (status === "published" ? updatedAt : null),
+    isDeleted: Boolean(rawData.isDeleted) || status === "deleted",
+    accountStatus: (rawData.accountStatus as string) || undefined,
     rejectionReason: (rawData.rejectionReason as string) || undefined,
   };
 }
@@ -683,8 +713,12 @@ export async function getPublishedListings(): Promise<{ listings: BusinessListin
 
     const listings: BusinessListing[] = [];
     querySnapshot.forEach((docSnap) => {
-      const normalized = normalizeListing(docSnap.id, docSnap.data());
-      if (normalized.status === "published") {
+      const data = docSnap.data();
+      if (data.isDeleted === true || data.status === "deleted" || data.accountStatus === "deletion_pending") {
+        return;
+      }
+      const normalized = normalizeListing(docSnap.id, data);
+      if (normalized.status === "published" && !normalized.isDeleted) {
         listings.push(normalized);
       }
     });
@@ -718,12 +752,17 @@ export async function getPublishedListingById(
       return { listing: null, error: "Listing not found" };
     }
 
-    const normalized = normalizeListing(docSnap.id, docSnap.data());
-    if (normalized.status !== "published") {
-      // Only owner or admin can view unpublished
+    const rawData = docSnap.data();
+    if (rawData.isDeleted === true || rawData.status === "deleted" || rawData.accountStatus === "deletion_pending") {
+      return { listing: null, error: "This listing is no longer available." };
+    }
+
+    const normalized = normalizeListing(docSnap.id, rawData);
+    if (normalized.status !== "published" || normalized.isDeleted) {
+      // Only owner or admin can view unpublished (if not deleted)
       const user = auth.currentUser;
-      if (!user || user.uid !== normalized.ownerId) {
-        return { listing: null, error: "Listing is not publicly available." };
+      if (!user || user.uid !== normalized.ownerId || normalized.isDeleted) {
+        return { listing: null, error: "Listing is no longer available." };
       }
     }
 
@@ -868,6 +907,27 @@ export async function updateListing(
     }
 
     const existingData = docSnap.data();
+
+    // Block updates if listing or account is marked deleted or deletion pending
+    if (
+      existingData.status === "deleted" ||
+      existingData.isDeleted === true ||
+      existingData.accountStatus === "deletion_pending"
+    ) {
+      return { success: false, error: "This listing has been deleted. Updates are disabled." };
+    }
+
+    try {
+      const userDocSnap = await getDoc(doc(db, "users", currentUser.uid));
+      if (userDocSnap.exists()) {
+        const uData = userDocSnap.data();
+        if (uData.accountStatus === "deletion_pending" || uData.isDeleted || uData.status === "deleted") {
+          return { success: false, error: "Your account is scheduled for deletion. Updates are disabled." };
+        }
+      }
+    } catch {
+      // Best-effort check
+    }
 
     // Verify ownership or admin privilege (supporting ownerId and legacy userId)
     const isOwner =
@@ -1277,16 +1337,46 @@ export async function updateListingVerification(
 }
 
 /**
- * Delete listing (Admin or Owner)
+ * Delete listing (Admin or Owner) via secure server-side API only.
+ * Automatically cascade-deletes all associated opportunity enquiries, restricted subcollections,
+ * and storage files. Client-side fallback is intentionally disabled to preserve strict server-side
+ * ownership and batch deletion consistency.
  */
 export async function deleteListing(listingId: string): Promise<{ error: string | null }> {
+  if (!listingId) {
+    return { error: "Listing ID is required." };
+  }
+
+  const currentUser = auth.currentUser;
+  if (!currentUser) {
+    return { error: "You must be signed in to delete a listing." };
+  }
+
   try {
-    const docRef = doc(db, "listings", listingId);
-    await deleteDoc(docRef);
-    return { error: null };
+    const idToken = await currentUser.getIdToken();
+    const response = await fetch("/api/listings/delete", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ listingId }),
+    });
+
+    const data = await response.json();
+    if (response.ok && data.success) {
+      return { error: null };
+    }
+
+    return {
+      error: data.error || "Failed to delete listing via server cascade.",
+    };
   } catch (err: unknown) {
     const error = err as { message?: string };
-    return { error: error.message || "Failed to delete listing." };
+    console.error("[deleteListing] Server API call failed:", err);
+    return {
+      error: error.message || "Network error while connecting to deletion service.",
+    };
   }
 }
 

@@ -96,16 +96,10 @@ export function OpportunityDetailView({
               <span className="bg-slate-100 text-[#5F7180] font-semibold text-[10px] sm:text-xs px-2.5 py-0.5 sm:px-3 sm:py-1 rounded">
                 {opp.sector}
               </span>
-              {opp.isDemo ? (
-                <span className="bg-slate-100 text-[#5F7180] font-bold text-[10px] sm:text-xs px-2.5 py-0.5 sm:px-3 sm:py-1 rounded border border-slate-200 uppercase tracking-wider">
-                  Sample Showcase
-                </span>
-              ) : (
-                <span className="bg-emerald-50 text-emerald-700 font-extrabold text-[10px] sm:text-xs px-2.5 py-0.5 sm:px-3 sm:py-1 rounded border border-emerald-200 flex items-center gap-1 uppercase tracking-wider">
-                  <span className="material-symbols-outlined text-[13px] sm:text-[14px]">verified</span>
-                  Live Published Listing
-                </span>
-              )}
+              <span className="bg-emerald-50 text-emerald-700 font-extrabold text-[10px] sm:text-xs px-2.5 py-0.5 sm:px-3 sm:py-1 rounded border border-emerald-200 flex items-center gap-1 uppercase tracking-wider">
+                <span className="material-symbols-outlined text-[13px] sm:text-[14px]">verified</span>
+                Verified Listing
+              </span>
               {opp.stageBadge && (
                 <span className="bg-[#EBF6FC] text-[#00658F] font-bold text-[10px] sm:text-xs px-2.5 py-0.5 sm:px-3 sm:py-1 rounded border border-[#DCECF2]">
                   {opp.stageBadge}
