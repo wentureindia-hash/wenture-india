@@ -316,7 +316,7 @@ export default function ProfilePage() {
       <Navbar />
 
       <main className="flex-grow py-12 sm:py-16">
-        <div className="w-full max-w-[1020px] mx-auto px-5 sm:px-8">
+        <div className="w-full max-w-[1020px] mx-auto px-3.5 sm:px-8">
           {/* ============================================================ */}
           {/* 1. HEADER */}
           {/* ============================================================ */}
@@ -751,7 +751,7 @@ export default function ProfilePage() {
                         type="tel"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
-                        placeholder="+91 98418 1008"
+                        placeholder="+91 98418 81008"
                         className="w-full px-4 py-2.5 bg-white border border-[#DCECF2] rounded-xl text-sm text-[#0A192A] focus:outline-none focus:border-[#00A6E8] focus:ring-1 focus:ring-[#00A6E8]/20"
                       />
                     </div>
@@ -1090,7 +1090,7 @@ export default function ProfilePage() {
                           </div>
 
                           {/* Middle: Investor Details Grid */}
-                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 py-4 border-b border-[#E2E8F0] text-xs">
+                          <div className="grid grid-cols-1 min-[480px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-3.5 py-4 border-b border-[#E2E8F0] text-xs">
                             <div>
                               <span className="text-[11px] font-semibold text-[#5F7180] block mb-0.5">
                                 Investor Name

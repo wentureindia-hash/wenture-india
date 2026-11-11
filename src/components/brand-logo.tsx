@@ -1,126 +1,57 @@
 import React from "react";
+import Image from "next/image";
 import { cn } from "@/lib/utils";
-import { WentureEmblem } from "@/components/wenture-emblem";
 
-interface BrandLogoProps {
+export interface BrandLogoProps {
   className?: string;
   showTagline?: boolean;
   showSubtitle?: boolean;
   size?: "sm" | "md" | "lg" | "xl";
   dark?: boolean;
   layout?: "horizontal" | "vertical";
+  priority?: boolean;
 }
 
 export function BrandLogo({
   className,
-  showTagline = false,
-  showSubtitle = false,
   size = "md",
   dark = false,
-  layout = "horizontal",
+  priority = true,
 }: BrandLogoProps) {
-  const emblemSize = {
-    sm: 34,
-    md: 44,
-    lg: 60,
-    xl: 84,
+  // Intrinsic dimensions: 651 x 383 (aspect ratio 1.6997:1)
+  // Explicit proportional heights so the logo is crisp, clear, never compressed, and fully in HD.
+  const sizeClasses = {
+    sm: "h-9 sm:h-10",
+    md: "h-11 sm:h-12 lg:h-[52px]",
+    lg: "h-16 sm:h-20 lg:h-24",
+    xl: "h-24 sm:h-28 lg:h-32",
   }[size];
 
-  const titleSize = {
-    sm: "text-lg sm:text-xl",
-    md: "text-xl sm:text-2xl",
-    lg: "text-2xl sm:text-3xl",
-    xl: "text-4xl sm:text-5xl",
-  }[size];
-
-  const taglineSize = {
-    sm: "text-[7.5px] tracking-[0.18em]",
-    md: "text-[9px] tracking-[0.22em]",
-    lg: "text-[11px] tracking-[0.25em]",
-    xl: "text-xs tracking-[0.28em]",
-  }[size];
-
-  const textColor = dark ? "text-white" : "text-[#0A192A]";
+  const logoSrc = dark ? "/wenture-logo-white.png" : "/wenture-logo.png";
 
   return (
     <div
       className={cn(
-        "select-none group inline-flex shrink-0",
-        layout === "vertical"
-          ? "flex-col items-center text-center gap-2"
-          : "flex-row items-center gap-2 sm:gap-2.5 xl:gap-3",
+        "select-none inline-flex items-center justify-center shrink-0 transition-opacity duration-200 group-hover:opacity-90",
         className
       )}
     >
-      {/* Official Wenture India Emblem */}
-      <div className="relative flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-105">
-        <WentureEmblem size={emblemSize} />
-      </div>
-
-      {/* Typography: Wenture + India with Tricolor Leaf Dot */}
-      <div
+      <Image
+        src={logoSrc}
+        alt="Wenture India - Connect. Build. Scale. Grow Together."
+        width={651}
+        height={383}
+        priority={priority}
+        unoptimized
         className={cn(
-          "flex flex-col shrink-0",
-          layout === "vertical" ? "items-center" : "items-start"
+          "w-auto object-contain max-h-full",
+          sizeClasses
         )}
-      >
-        <div className={cn("flex items-baseline font-extrabold tracking-tight font-heading leading-none whitespace-nowrap", titleSize)}>
-          <span className={textColor}>Wenture</span>
-          <span className={cn("relative inline-flex items-baseline", textColor)}>
-            {/* Custom styled 'I' and 'ndia' with tricolor leaf dot */}
-            <span className="relative">
-              I
-            </span>
-            <span>nd</span>
-            {/* Lowercase 'i' with tricolor dot */}
-            <span className="relative inline-block">
-              {/* Tricolor Flame / Leaf as 'i' dot */}
-              <span
-                className="absolute -top-[5px] sm:-top-[6px] left-[1px] w-[5px] h-[6px] sm:w-[6px] sm:h-[7.5px] rounded-full rotate-45 pointer-events-none"
-                style={{
-                  background:
-                    "linear-gradient(135deg, #F47920 0%, #FFFFFF 50%, #0B8043 100%)",
-                  boxShadow: "0 0 2px rgba(0,0,0,0.15)",
-                }}
-              />
-              i
-            </span>
-            <span>a</span>
-          </span>
-        </div>
-
-        {/* Optional "India International" subtext */}
-        {showSubtitle && (
-          <span
-            className={cn(
-              "font-bold uppercase mt-1 leading-none text-[9px] tracking-[0.2em]",
-              dark ? "text-slate-400" : "text-slate-500"
-            )}
-          >
-            India International
-          </span>
-        )}
-
-        {/* Official Tagline with Saffron, Silver & Green Dots */}
-        {showTagline && (
-          <div
-            className={cn(
-              "font-extrabold uppercase mt-1.5 leading-tight flex items-center flex-wrap gap-1 font-heading",
-              taglineSize,
-              dark ? "text-slate-300" : "text-[#0A192A]"
-            )}
-          >
-            <span>CONNECT</span>
-            <span className="w-1 h-1 rounded-full bg-[#F47920] inline-block" />
-            <span>BUILD</span>
-            <span className="w-1 h-1 rounded-full bg-slate-300 inline-block" />
-            <span>SCALE</span>
-            <span className="w-1 h-1 rounded-full bg-[#0B8043] inline-block" />
-            <span>GROW TOGETHER</span>
-            <span className="w-1 h-1 rounded-full bg-[#F47920] inline-block" />
-          </div>
-        )}
-      </div>
+        style={{
+          aspectRatio: "651 / 383",
+          imageRendering: "auto",
+        }}
+      />
     </div>
   );
 }

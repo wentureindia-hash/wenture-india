@@ -106,6 +106,9 @@ export default function AboutPage() {
                   <p className="text-xs sm:text-sm text-on-surface">
                     {COMPANY.contact.phone}
                   </p>
+                  <p className="text-xs sm:text-sm text-on-surface">
+                    {COMPANY.contact.secondaryPhone}
+                  </p>
                 </div>
               </div>
 

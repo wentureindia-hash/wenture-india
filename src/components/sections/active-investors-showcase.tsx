@@ -67,7 +67,7 @@ export function ActiveInvestorsShowcase({
 
         {/* Loading Skeletons */}
         {loading ? (
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-6">
+          <div className="grid grid-cols-1 min-[500px]:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-6">
             {[1, 2, 3].map((n) => (
               <div
                 key={n}
@@ -93,8 +93,8 @@ export function ActiveInvestorsShowcase({
             ))}
           </div>
         ) : displayInvestors.length > 0 ? (
-          /* Real Investor Cards Grid (2x2 on mobile, 3-col on desktop) */
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-6">
+          /* Real Investor Cards Grid (Responsive 1-col on small mobile, 2-col on mid-mobile/tablet, 3-col on desktop) */
+          <div className="grid grid-cols-1 min-[500px]:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-6">
             {displayInvestors.map((investor) => (
               <InvestorCard key={investor.id} investor={investor} />
             ))}

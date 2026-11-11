@@ -22,8 +22,11 @@ export const COMPANY = {
     phone: "+91 95407 21008",
     phoneHref: "tel:+919540721008",
     
-    whatsapp: "+91 98418 1008",
-    whatsappHref: "https://wa.me/91984181008",
+    secondaryPhone: "+91 95997 93356",
+    secondaryPhoneHref: "tel:+919599793356",
+    
+    whatsapp: "+91 98418 81008",
+    whatsappHref: "https://wa.me/919841881008",
   },
   
   socials: {

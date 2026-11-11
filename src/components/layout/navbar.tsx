@@ -8,6 +8,7 @@ import { BrandLogo } from "@/components/brand-logo";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "@/lib/firebase/auth-context";
 import { RoleSwitchModal } from "@/components/profile/role-switch-modal";
+import { MasterSearchBar } from "@/components/search/master-search-bar";
 
 interface NavbarProps {
   className?: string;
@@ -141,6 +142,12 @@ export function Navbar({ className, hideAuth = false }: NavbarProps) {
     }
     return pathname.startsWith(href);
   };
+
+  const isExcludedPage =
+    pathname.startsWith("/admin") ||
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/signup") ||
+    pathname.startsWith("/profile");
 
   return (
     <>
@@ -498,22 +505,23 @@ export function Navbar({ className, hideAuth = false }: NavbarProps) {
         )}
 
         {/* Mobile Hamburger / Quick CTA */}
-        <div className="flex lg:hidden items-center gap-2">
+        <div className="flex lg:hidden items-center gap-1.5 sm:gap-2 shrink-0">
           {!hideAuth && (
             isAuthenticated ? (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1 sm:gap-1.5">
                 {isAdmin && (
                   <Link
                     href="/admin"
-                    className="bg-[#F4FAFD] border border-[#DCECF2] text-xs font-bold text-[#00658F] px-2.5 py-1.5 rounded-md flex items-center gap-1"
+                    className="bg-[#F4FAFD] border border-[#DCECF2] text-[11px] sm:text-xs font-bold text-[#00658F] px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-md flex items-center gap-1"
                   >
-                    <span className="material-symbols-outlined text-[15px]">shield_person</span>
+                    <span className="material-symbols-outlined text-[14px] sm:text-[15px]">shield_person</span>
                     <span>Admin</span>
                   </Link>
                 )}
                 <Link
                   href="/profile"
-                  className="bg-white border border-[#DCECF2] text-xs font-bold text-[#0A192A] px-2.5 py-1.5 rounded-md flex items-center gap-1"
+                  className="bg-white border border-[#DCECF2] text-xs font-bold text-[#0A192A] p-1.5 sm:px-2.5 sm:py-1.5 rounded-md flex items-center justify-center"
+                  aria-label="Profile"
                 >
                   <span className="material-symbols-outlined text-[16px] text-[#00A6E8]">
                     person
@@ -523,7 +531,7 @@ export function Navbar({ className, hideAuth = false }: NavbarProps) {
             ) : (
               <Link
                 href="/signup"
-                className="bg-[#00A6E8] text-white px-3 py-1.5 rounded-md text-xs font-bold"
+                className="bg-[#00A6E8] hover:bg-[#0093CE] text-white px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-md text-xs font-bold transition-colors"
               >
                 Join
               </Link>
@@ -531,15 +539,22 @@ export function Navbar({ className, hideAuth = false }: NavbarProps) {
           )}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-1.5 text-[#0A192A] hover:text-[#00A6E8] rounded-md focus:outline-none"
+            className="p-1 sm:p-1.5 text-[#0A192A] hover:text-[#00A6E8] rounded-md focus:outline-none cursor-pointer"
             aria-label="Toggle Navigation"
           >
-            <span className="material-symbols-outlined text-[26px]">
+            <span className="material-symbols-outlined text-[24px] sm:text-[26px]">
               {mobileMenuOpen ? "close" : "menu"}
             </span>
           </button>
         </div>
       </div>
+
+      {/* Global Master Search Bar (2nd row across public pages) */}
+      {!isExcludedPage && (
+        <React.Suspense fallback={null}>
+          <MasterSearchBar />
+        </React.Suspense>
+      )}
 
       {/* Mobile Menu Dropdown */}
       <AnimatePresence>
@@ -549,7 +564,7 @@ export function Navbar({ className, hideAuth = false }: NavbarProps) {
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.2 }}
-            className="lg:hidden bg-white border-b border-[#DCECF2] overflow-hidden"
+            className="lg:hidden bg-white border-b border-[#DCECF2] max-h-[calc(100vh-4rem)] overflow-y-auto overscroll-contain"
           >
             <div className="px-6 py-5 flex flex-col space-y-3">
               {navLinks.map((link) => {

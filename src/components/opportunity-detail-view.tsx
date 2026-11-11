@@ -116,7 +116,7 @@ export function OpportunityDetailView({
             </p>
 
             {/* Quick Stats Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 pt-4 sm:pt-6 border-t border-[#DCECF2]">
+            <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 pt-4 sm:pt-6 border-t border-[#DCECF2]">
               <div>
                 <span className="block text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[#5F7180]">
                   Location
@@ -138,7 +138,7 @@ export function OpportunityDetailView({
                 </span>
               </div>
 
-              <div className="col-span-2 sm:col-span-1">
+              <div className="min-[420px]:col-span-2 sm:col-span-1">
                 <span className="block text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[#5F7180]">
                   Target Requirement
                 </span>

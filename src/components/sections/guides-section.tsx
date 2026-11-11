@@ -31,8 +31,8 @@ export function GuidesSection() {
           </Link>
         </div>
 
-        {/* 5 Guide Cards in Responsive Grid (2x2 on mobile, 3-col on desktop) */}
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-6">
+        {/* 5 Guide Cards in Responsive Grid (1-col on small mobile, 2-col on mid-mobile/tablet, 3-col on desktop) */}
+        <div className="grid grid-cols-1 min-[500px]:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-6">
           {GUIDES.map((guide, idx) => (
             <article
               key={guide.slug}

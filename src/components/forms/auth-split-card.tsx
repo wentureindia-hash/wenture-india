@@ -6,7 +6,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signInUser, signUpUser, resetUserPassword, addRoleToAccount, UserRole } from "@/lib/firebase/auth";
 import { BrandLogo } from "@/components/brand-logo";
-import { WentureEmblem } from "@/components/wenture-emblem";
 
 interface AuthSplitCardProps {
   initialMode?: "login" | "signup";
@@ -163,7 +162,7 @@ export function AuthSplitCard({
       {/* ============================================================ */}
       {/* LEFT PANEL: Geometric Crystalline 3D Visual + Brand Context */}
       {/* ============================================================ */}
-      <div className="lg:col-span-6 relative p-8 sm:p-10 flex flex-col justify-between overflow-hidden border-b lg:border-b-0 lg:border-r border-[#DCECF2] bg-[#F4FAFD]">
+      <div className="lg:col-span-6 relative p-5 sm:p-8 md:p-10 flex flex-col justify-between overflow-hidden border-b lg:border-b-0 lg:border-r border-[#DCECF2] bg-[#F4FAFD]">
         {/* Premium 3D Crystalline Origami Background Image */}
         <div className="absolute inset-0 z-0">
           <Image
@@ -192,8 +191,7 @@ export function AuthSplitCard({
         {/* Center: Floating Glassmorphic Mini-Card Mockup */}
         <div className="relative z-10 my-8 self-end w-48 sm:w-56 bg-white/60 backdrop-blur-md rounded-2xl p-4 border border-white/80 shadow-[0_8px_24px_rgba(10,25,42,0.06)] transform rotate-1 hover:rotate-0 transition-transform duration-300">
           <div className="flex items-center gap-2 mb-3">
-            <WentureEmblem size={22} />
-            <span className="text-xs font-bold text-[#0A192A] font-heading">WentureIndia</span>
+            <BrandLogo size="sm" />
           </div>
 
           <div className="space-y-2 mb-3">
@@ -220,11 +218,11 @@ export function AuthSplitCard({
       {/* ============================================================ */}
       {/* RIGHT PANEL: Authentic Form Matching Uploaded Design */}
       {/* ============================================================ */}
-      <div className="lg:col-span-6 p-8 sm:p-12 flex flex-col justify-center bg-white">
+      <div className="lg:col-span-6 p-5 sm:p-8 md:p-12 flex flex-col justify-center bg-white">
         <div className="w-full max-w-[400px] mx-auto">
           {/* Headline & Subtitle */}
           <div className="mb-6">
-            <h1 className="text-3xl sm:text-4xl font-bold text-[#0A192A] tracking-tight">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#0A192A] tracking-tight">
               {mode === "login" ? "Welcome back." : "Create Account."}
             </h1>
             <p className="text-sm font-normal text-[#5F7180] mt-1.5">

@@ -796,7 +796,7 @@ export default function EntrepreneurListingsPage() {
       <Navbar />
 
       <main className="flex-grow py-12 sm:py-16">
-        <div className="w-full max-w-[1140px] mx-auto px-5 sm:px-8">
+        <div className="w-full max-w-[1140px] mx-auto px-3.5 sm:px-8">
           {/* Breadcrumb & Navigation */}
           <div className="flex items-center gap-2 text-xs font-semibold text-[#5F7180] mb-6">
             <Link href="/profile" className="hover:text-[#00A6E8] transition-colors flex items-center gap-1">
@@ -982,7 +982,7 @@ export default function EntrepreneurListingsPage() {
                         </div>
 
                         {/* Metadata Grid */}
-                        <div className="py-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 border-b border-[#DCECF2] text-xs">
+                        <div className="py-4 grid grid-cols-1 min-[480px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4 border-b border-[#DCECF2] text-xs">
                           <div>
                             <span className="text-[#5F7180] block mb-0.5">Profile / Type:</span>
                             <span className="font-bold text-[#0A192A]">{enq.senderType || "Direct Investor"}</span>

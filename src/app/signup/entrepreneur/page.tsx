@@ -14,7 +14,7 @@ export default function EntrepreneurSignupPage() {
     <div className="min-h-screen bg-[#F6FAFF] flex flex-col justify-between selection:bg-primary-container selection:text-white">
       <Navbar />
 
-      <main className="flex-grow flex items-center justify-center p-margin-mobile md:p-margin-desktop py-12">
+      <main className="flex-grow flex items-center justify-center px-3.5 sm:px-6 md:p-margin-desktop py-8 sm:py-12">
         <AuthSplitCard initialMode="signup" initialRole="entrepreneur" />
       </main>
 

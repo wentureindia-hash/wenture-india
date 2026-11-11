@@ -156,7 +156,7 @@ export function ExploreSectors() {
         </div>
 
         {/* Sectors Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-2.5 sm:gap-4 md:gap-6">
+        <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
           {activeSectorsWithCounts.map((sector) => (
             <Link
               key={sector.id}

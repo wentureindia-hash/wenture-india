@@ -46,6 +46,16 @@ const contactChannels: ContactItem[] = [
     colorClass: "bg-indigo-50 text-indigo-600 border-indigo-200",
   },
   {
+    id: "phone-secondary",
+    title: "Direct Helpline",
+    value: "+91 95997 93356",
+    href: "tel:+919599793356",
+    icon: Phone,
+    actionText: "Call Direct",
+    badge: "Direct Support",
+    colorClass: "bg-teal-50 text-teal-700 border-teal-200",
+  },
+  {
     id: "whatsapp",
     title: "WhatsApp Business",
     value: "+91 98418 81008",

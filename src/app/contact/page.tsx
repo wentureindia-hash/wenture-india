@@ -40,7 +40,7 @@ export default function ContactPage() {
                 </h3>
 
                 <div className="space-y-3 sm:space-y-4">
-                  {/* Phone */}
+                  {/* Direct Phone */}
                   <a
                     href={COMPANY.contact.phoneHref}
                     className="flex items-start gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border border-border-subtle hover:border-primary-container/60 hover:bg-surface transition-all group"
@@ -54,6 +54,27 @@ export default function ContactPage() {
                       </p>
                       <p className="font-button-text text-xs sm:text-sm text-on-surface group-hover:text-primary-container">
                         {COMPANY.contact.phone}
+                      </p>
+                      <p className="text-[11px] sm:text-xs text-on-surface-variant mt-0.5">
+                        Mon – Sat, 9:30 AM – 6:30 PM IST
+                      </p>
+                    </div>
+                  </a>
+
+                  {/* Secondary Direct Phone */}
+                  <a
+                    href={COMPANY.contact.secondaryPhoneHref}
+                    className="flex items-start gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border border-border-subtle hover:border-primary-container/60 hover:bg-surface transition-all group"
+                  >
+                    <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-surface-container-high text-primary-container flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                      <span className="material-symbols-outlined text-[20px] sm:text-[22px]">call</span>
+                    </div>
+                    <div>
+                      <p className="font-label-caps text-[10px] sm:text-[11px] text-on-surface-variant uppercase font-semibold">
+                        Direct Helpline
+                      </p>
+                      <p className="font-button-text text-xs sm:text-sm text-on-surface group-hover:text-primary-container">
+                        {COMPANY.contact.secondaryPhone}
                       </p>
                       <p className="text-[11px] sm:text-xs text-on-surface-variant mt-0.5">
                         Mon – Sat, 9:30 AM – 6:30 PM IST
@@ -87,16 +108,16 @@ export default function ContactPage() {
                   {/* Business Email */}
                   <a
                     href={`mailto:${COMPANY.contact.businessEmail}`}
-                    className="flex items-start gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border border-border-subtle hover:border-primary-container/60 hover:bg-surface transition-all group"
+                    className="flex items-start gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border border-border-subtle hover:border-primary-container/60 hover:bg-surface transition-all group min-w-0"
                   >
                     <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-surface-container-high text-primary-container flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                       <span className="material-symbols-outlined text-[20px] sm:text-[22px]">mail</span>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-label-caps text-[10px] sm:text-[11px] text-on-surface-variant uppercase font-semibold">
                         Business Inquiries
                       </p>
-                      <p className="font-button-text text-xs sm:text-sm text-on-surface group-hover:text-primary-container">
+                      <p className="font-button-text text-xs sm:text-sm text-on-surface group-hover:text-primary-container break-all sm:break-normal">
                         {COMPANY.contact.businessEmail}
                       </p>
                     </div>
@@ -105,16 +126,16 @@ export default function ContactPage() {
                   {/* General Email */}
                   <a
                     href={`mailto:${COMPANY.contact.generalEmail}`}
-                    className="flex items-start gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border border-border-subtle hover:border-primary-container/60 hover:bg-surface transition-all group"
+                    className="flex items-start gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border border-border-subtle hover:border-primary-container/60 hover:bg-surface transition-all group min-w-0"
                   >
                     <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-surface-container-high text-primary-container flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
                       <span className="material-symbols-outlined text-[20px] sm:text-[22px]">alternate_email</span>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-label-caps text-[10px] sm:text-[11px] text-on-surface-variant uppercase font-semibold">
                         General Desk
                       </p>
-                      <p className="font-button-text text-xs sm:text-sm text-on-surface group-hover:text-primary-container">
+                      <p className="font-button-text text-xs sm:text-sm text-on-surface group-hover:text-primary-container break-all sm:break-normal">
                         {COMPANY.contact.generalEmail}
                       </p>
                     </div>

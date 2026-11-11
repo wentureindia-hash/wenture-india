@@ -117,7 +117,7 @@ export function ExpressInterestModal({
 
   if (!isOpen || !investor) return null;
 
-  const whatsappUrl = `https://wa.me/91984181008?text=${encodeURIComponent(
+  const whatsappUrl = `https://wa.me/919841881008?text=${encodeURIComponent(
     `Hello Wenture India Team, I would like to express interest in connecting with Investor: ${investor.investorName} (${investor.investorType} - ${investor.location}).`
   )}`;
 
@@ -139,15 +139,15 @@ export function ExpressInterestModal({
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
           transition={{ duration: 0.2 }}
-          className="relative bg-white rounded-2xl sm:rounded-3xl border border-[#DCECF2] shadow-2xl w-full max-w-xl overflow-hidden z-10 my-8"
+          className="relative bg-white rounded-2xl sm:rounded-3xl border border-[#DCECF2] shadow-2xl w-full max-w-xl overflow-hidden z-10 my-auto max-h-[calc(100vh-2rem)] sm:max-h-[90vh] flex flex-col"
         >
           {/* Header */}
-          <div className="px-6 py-5 border-b border-[#DCECF2] bg-[#F4FAFD] flex items-center justify-between">
+          <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-[#DCECF2] bg-[#F4FAFD] flex items-center justify-between shrink-0">
             <div>
               <span className="text-[10px] font-extrabold uppercase tracking-wider text-[#00658F] block">
                 Expression of Interest
               </span>
-              <h2 className="text-lg sm:text-xl font-extrabold text-[#0A192A] font-heading">
+              <h2 className="text-base sm:text-xl font-extrabold text-[#0A192A] font-heading">
                 Connect with {investor.investorName}
               </h2>
             </div>
@@ -155,7 +155,7 @@ export function ExpressInterestModal({
             <button
               type="button"
               onClick={handleClose}
-              className="p-1.5 text-slate-400 hover:text-[#0A192A] rounded-lg hover:bg-white transition-colors"
+              className="p-1.5 text-slate-400 hover:text-[#0A192A] rounded-lg hover:bg-white transition-colors shrink-0"
               aria-label="Close Modal"
             >
               <span className="material-symbols-outlined text-[20px]">close</span>
@@ -163,7 +163,7 @@ export function ExpressInterestModal({
           </div>
 
           {/* Body */}
-          <div className="p-6 sm:p-8">
+          <div className="p-4 sm:p-6 md:p-8 overflow-y-auto flex-1">
             {submitted ? (
               <div className="text-center py-6">
                 <div className="w-14 h-14 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center mx-auto mb-4">

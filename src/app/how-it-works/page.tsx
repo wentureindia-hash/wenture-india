@@ -99,7 +99,7 @@ export default function HowItWorksPage() {
             {/* Desktop Connecting Line */}
             <div className="hidden md:block absolute top-8 left-12 right-12 h-0.5 bg-[#DCECF2] z-0" />
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 sm:gap-6 relative z-10">
+            <div className="grid grid-cols-1 min-[420px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 sm:gap-6 relative z-10">
               {steps.map((step) => (
                 <div key={step.num} className="flex flex-col items-center text-center bg-white sm:bg-transparent p-3.5 sm:p-0 rounded-xl sm:rounded-none border sm:border-0 border-[#DCECF2] shadow-sm sm:shadow-none">
                   <div

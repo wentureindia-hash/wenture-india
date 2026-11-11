@@ -13,13 +13,13 @@ export function Footer() {
   };
 
   return (
-    <footer className="bg-wenture-dark text-white pt-16 pb-12 border-t border-slate-800">
+    <footer className="bg-[#F4FAFD] text-[#0A192A] pt-16 pb-12 border-t border-[#DCECF2]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8 pb-12 border-b border-slate-800/80">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8 pb-12 border-b border-[#DCECF2]">
           {/* Brand Info */}
           <div className="space-y-3 max-w-md">
-            <BrandLogo size="md" dark />
-            <p className="text-sm text-slate-400 font-medium leading-relaxed">
+            <BrandLogo size="md" dark={false} />
+            <p className="text-sm text-[#5F7180] font-medium leading-relaxed">
               &ldquo;Connect. Build. Scale. Grow Together.&rdquo;
             </p>
             <p className="text-xs text-slate-500">

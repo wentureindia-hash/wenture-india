@@ -198,7 +198,7 @@ export function InvestorAuthForm({ mode }: InvestorAuthFormProps) {
           id="phone"
           label="Phone Number"
           type="tel"
-          placeholder="+91 98418 10008"
+          placeholder="+91 98418 81008"
           icon="call"
           error={errorsSignup.phone?.message}
           {...registerSignup("phone")}

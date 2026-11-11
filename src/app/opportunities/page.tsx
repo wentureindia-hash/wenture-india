@@ -382,7 +382,7 @@ function OpportunitiesContent() {
                 <p className="text-sm font-semibold text-[#5F7180]">Loading published opportunities...</p>
               </div>
             ) : filteredOpps.length > 0 ? (
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-6 lg:gap-8">
+              <div className="grid grid-cols-1 min-[500px]:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-6 lg:gap-8">
                 {filteredOpps.map((opp) => (
                   <OpportunityCard
                     key={opp.id}

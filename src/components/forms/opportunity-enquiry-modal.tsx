@@ -260,18 +260,18 @@ export function OpportunityEnquiryModal({
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
-          className="relative w-full max-w-lg bg-white border border-[#DCECF2] rounded-2xl shadow-2xl z-10 overflow-hidden my-auto"
+          className="relative w-full max-w-lg bg-white border border-[#DCECF2] rounded-2xl shadow-2xl z-10 overflow-hidden my-auto max-h-[calc(100vh-2rem)] sm:max-h-[90vh] flex flex-col"
         >
           {/* Modal Header */}
-          <div className="p-6 border-b border-[#DCECF2] flex justify-between items-start bg-[#F6FAFF]">
+          <div className="p-4 sm:p-6 border-b border-[#DCECF2] flex justify-between items-start bg-[#F6FAFF] shrink-0">
             <div>
               <span className="text-[11px] text-[#00A6E8] font-bold uppercase tracking-wider block mb-1">
                 Opportunity Enquiry
               </span>
-              <h3 className="text-xl font-bold text-[#0A192A] leading-tight">
+              <h3 className="text-lg sm:text-xl font-bold text-[#0A192A] leading-tight">
                 {opportunity.title}
               </h3>
-              <p className="text-xs text-[#5F7180] mt-1 flex items-center gap-2">
+              <p className="text-xs text-[#5F7180] mt-1 flex items-center gap-2 flex-wrap">
                 <span>{opportunity.category}</span>
                 <span>•</span>
                 <span>{opportunity.sector}</span>
@@ -281,7 +281,7 @@ export function OpportunityEnquiryModal({
             </div>
             <button
               onClick={handleClose}
-              className="text-[#5F7180] hover:text-[#0A192A] p-1.5 rounded-lg hover:bg-slate-200/60 transition-colors"
+              className="text-[#5F7180] hover:text-[#0A192A] p-1.5 rounded-lg hover:bg-slate-200/60 transition-colors shrink-0"
               aria-label="Close Modal"
             >
               <span className="material-symbols-outlined text-[22px]">close</span>
@@ -289,7 +289,7 @@ export function OpportunityEnquiryModal({
           </div>
 
           {/* Modal Body */}
-          <div className="p-6 sm:p-8">
+          <div className="p-4 sm:p-6 md:p-8 overflow-y-auto flex-1">
             {!isAuthenticated ? (
               <div className="text-center py-4">
                 <div className="w-14 h-14 bg-[#EBF6FC] text-[#00A6E8] rounded-2xl flex items-center justify-center mx-auto mb-4 border border-[#00A6E8]/20 shadow-xs">

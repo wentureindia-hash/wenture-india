@@ -79,8 +79,8 @@ export function TrendingNow() {
           </Link>
         </div>
 
-        {/* 4 Trending Cards (2x2 on mobile, 4-col on desktop) */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-5">
+        {/* 4 Trending Cards (Responsive 1-col on tiny mobile, 2-col on standard mobile, 4-col on desktop) */}
+        <div className="grid grid-cols-1 min-[360px]:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
           {TRENDING_ITEMS.map((item) => (
             <Link
               key={item.id}
